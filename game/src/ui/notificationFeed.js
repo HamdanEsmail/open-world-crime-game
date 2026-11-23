@@ -28,6 +28,8 @@ export function createNotificationFeed(game, containers) {
 
   const toasts = [];
   const hideAt = { subtitle: 0, vehicle: 0, location: 0, radio: 0 };
+  /** The feed's own clock in milliseconds: it runs with the HUD and stands still while a frame is frozen. */
+  let feedClock = 0;
   let nextLocationCheck = 0;
   let shownDistrict = null;
 
@@ -38,7 +40,7 @@ export function createNotificationFeed(game, containers) {
     createElement('i', 'toast-edge', node);
     createElement('span', 'toast-text', node, text);
     toastList.prepend(node);
-    toasts.unshift({ node, hideAt: performance.now() + seconds * 1000 });
+    toasts.unshift({ node, hideAt: feedClock + seconds * 1000 });
     while (toasts.length > 4) toasts.pop().node.remove();
   }
 
@@ -56,7 +58,7 @@ export function createNotificationFeed(game, containers) {
     setShown(subtitle, true);
     replayClass(subtitle, 'is-new', 0.35);
     const words = String(text).split(/\s+/).length;
-    hideAt.subtitle = performance.now() + 1000 * (seconds || Math.min(8, Math.max(2.6, 1.6 + words * 0.32)));
+    hideAt.subtitle = feedClock + 1000 * (seconds || Math.min(8, Math.max(2.6, 1.6 + words * 0.32)));
   }
 
   /** District and street, bottom right. */
@@ -66,7 +68,7 @@ export function createNotificationFeed(game, containers) {
     setShown(streetName, Boolean(street));
     setShown(locationCard, true);
     replayClass(locationCard, 'is-new', 0.6);
-    hideAt.location = performance.now() + seconds * 1000;
+    hideAt.location = feedClock + seconds * 1000;
   }
 
   /** The car's model and class, bottom right, when Zayd gets in. */
@@ -76,7 +78,7 @@ export function createNotificationFeed(game, containers) {
     setText(vehicleClass, (spec.className || '').toUpperCase());
     setShown(vehicleCard, true);
     replayClass(vehicleCard, 'is-new', 0.6);
-    hideAt.vehicle = performance.now() + seconds * 1000;
+    hideAt.vehicle = feedClock + seconds * 1000;
   }
 
   /** The station banner, top centre. */
@@ -85,12 +87,13 @@ export function createNotificationFeed(game, containers) {
     setText(radioTagline, station ? station.tagline || '' : '');
     setShown(radio, true);
     replayClass(radio, 'is-new', 0.5);
-    hideAt.radio = performance.now() + seconds * 1000;
+    hideAt.radio = feedClock + seconds * 1000;
   }
 
   /** Age toasts and timed cards; check the district twice a second. */
-  function update() {
-    const now = performance.now();
+  function update(dt) {
+    if (!game.time.frozen) feedClock += Math.min(0.25, dt > 0 ? dt : 0) * 1000;
+    const now = feedClock;
     for (let i = toasts.length - 1; i >= 0; i -= 1) {
       const toast = toasts[i];
       if (now > toast.hideAt && !toast.leaving) {

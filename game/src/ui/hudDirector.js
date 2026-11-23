@@ -126,7 +126,7 @@ export function createHud(game) {
       cover.update();
       if (inVehicle) speedometer.update();
       else weapon.update();
-      feed.update();
+      feed.update(dt);
       reticle.update();
       activityLine.update();
     } catch (error) {

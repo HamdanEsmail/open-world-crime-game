@@ -19,6 +19,7 @@ export async function stageScreenshot(game, name) {
   await scene(game, stage);
   game.staging = null;
   game.time.paused = true;
+  game.time.frozen = true; // subtitles and banners on screen stay while the frame is held
   game.cityFurniture.refresh();
   await stage.frames(50); // let the minimap tiles, shadows and textures finish drawing
   window.shotReady = true;
@@ -112,13 +113,13 @@ async function getawayRehearsalUnderPursuit(game, stage) {
   game.traffic.populateNow();
   await stage.play(0.1);
   // Keep the two southbound lanes ahead clear for the run; the northbound side keeps its traffic.
-  for (let z = -285; z <= -100; z += 16) game.traffic.clearArea(lane - 2.6, z, 8.5, 20);
-  stage.driveAlong(car, [{ x: lane, z: -230 }, { x: lane, z: -170 }, { x: lane, z: -90 }, { x: lane, z: 20 }], 22);
-  await stage.play(5.5);
-  // Hold the take until northbound traffic is passing on the far side of the median.
-  const passing = () => game.vehicles.list.some((other) => other.tags.traffic && other.driver
-    && other.pos.x > 42 && other.pos.x < 50 && other.pos.z < car.pos.z - 6 && other.pos.z > car.pos.z - 30);
-  await stage.playUntil(passing, 5);
+  for (let z = -285; z <= 40; z += 16) game.traffic.clearArea(lane - 2.6, z, 8.5, 30);
+  stage.driveAlong(car, [{ x: lane, z: -230 }, { x: lane, z: -170 }, { x: lane, z: -90 }, { x: lane, z: 40 }], 22);
+  // Run the first planned junction, Pearl Street, and take the picture a few car lengths beyond it,
+  // as dispatch calls the suspect's position.
+  await stage.playUntil(() => car.pos.z > -112, 12);
+  game.policeRadio.reportNow('update');
+  await stage.playUntil(() => car.pos.z > -96, 3);
   // Slots are [metres to the car's left, metres ahead (negative is behind), heading offset].
   stage.gatherPursuit(car, [[-3.7, -8.5, 0.03], [0.3, -20, -0.02], [-3.5, -32, 0.02], [0.2, -47, 0]]);
   await stage.play(0.4);

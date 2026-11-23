@@ -19,10 +19,12 @@ const NUMBER_WORDS = ['', 'one', 'two', 'three', 'four', 'five'];
 /**
  * Create the radio chatter.
  * @returns {{enabled: boolean, lines: {time:number, speaker:string, text:string}[], say: Function,
- *   setEnabled: Function, update: Function}}
+ *   report: (situation: string, x?: number, z?: number) => void, setEnabled: Function, update: Function}}
+ *   report() has dispatch compose and queue a line for a situation ('update', 'roadblock', ...);
+ *   reportNow() says it at once.
  */
 export function createPoliceRadioChatter(game) {
-  const radio = { enabled: true, lines: [], update, say, setEnabled, describeSuspect, updateMs: 0 };
+  const radio = { enabled: true, lines: [], update, say, report: queueLine, reportNow, setEnabled, describeSuspect, updateMs: 0 };
   const queue = [];
   for (let i = 0; i < QUEUE_SIZE; i += 1) queue.push({ active: false, text: '', speaker: '', priority: 0, born: 0, replyText: '', replySpeaker: '' });
   const reply = { pending: false, at: 0, text: '', speaker: '' };
@@ -256,6 +258,18 @@ export function createPoliceRadioChatter(game) {
   function say(text, speaker) {
     if (!radio.enabled || !text) return;
     emitLine(String(text), speaker || RADIO_SPEAKERS.D);
+  }
+
+  /**
+   * Have the channel describe a situation this instant, ahead of whatever is waiting: the line is
+   * composed from the same script as every other call, for where the suspect is right now.
+   */
+  function reportNow(situation, x, z) {
+    if (!radio.enabled) return;
+    const template = pickTemplate(RADIO_LINES[situation]);
+    if (!template) return;
+    const scene = describeScene(x, z);
+    emitLine(fill(template.slice(2), scene), speakerOf(template[0], scene));
   }
 
   /** Mute (false) or unmute (true) the channel; muting drops whatever was waiting. */

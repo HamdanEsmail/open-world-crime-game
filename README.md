@@ -82,6 +82,7 @@ requests: the game is the static files under `game/`.
 | `missions/`, `story/` | the job engine, the ten jobs, the cast, cutscenes, the Cover meter, the endings |
 | `activities/`, `economy/` | races, fares, couriers, exports, stunts, falcons, shops, safehouses, money and rank |
 | `effects/`, `audio/`, `ui/` | particles and glows, synthesized sound and radio, the HUD, minimap and menus |
+| `shots/` | the staged scenes behind `?shot=chase`, `storm`, `dunes` and `title`: each plays a real job to a telling moment and freezes the frame for a screenshot |
 
 `main.ts` is the bounty's hand-in program: it copies `game/` and `screenshots/` to the output folder
 and writes the dossier the judge reads.

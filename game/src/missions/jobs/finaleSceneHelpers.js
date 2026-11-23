@@ -373,7 +373,7 @@ export function strollTo(m, person, x, z, pace = 'walk') {
 
 /**
  * Hold the time of day for the length of a job, so a sunset stays a sunset however long the player
- * takes (the city clock runs a game hour a minute). Returns { set(hour) } to move the held hour.
+ * takes (the city clock runs a game hour every two minutes). Returns { set(hour) } to move the held hour.
  */
 export function holdTheClock(m, scope, hour) {
   let held = hour;

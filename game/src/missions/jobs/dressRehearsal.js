@@ -42,7 +42,7 @@ async function runDressRehearsal(m, scope) {
     officersKilled: 0,
     gateSeconds: 0,
   };
-  holdTheClock(m, scope, 17.4);
+  holdTheClock(m, scope, 15.6);
   m.setWeather(0, 4);
   m.setTraffic(0.9);
   m.setPedestrians(0.9);

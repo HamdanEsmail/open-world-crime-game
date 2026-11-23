@@ -139,6 +139,8 @@ export function createFollowCamera(game) {
     desired.copy(target).addScaledVector(rayDirection, currentDistance);
     desired.x += -forwardZ * shoulder;
     desired.z += forwardX * shoulder;
+    // Backed against a wall on foot, the camera rises to look over Zayd's head instead of into it.
+    if (!vehicle) desired.y += clamp((2.4 - currentDistance) / 1.8, 0, 1) * 0.85;
     const ground = game.terrain ? game.terrain.heightAt(desired.x, desired.z) : 0;
     if (desired.y < ground + 0.35) desired.y = ground + 0.35;
 

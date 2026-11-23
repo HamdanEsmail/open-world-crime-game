@@ -93,6 +93,7 @@ async function startNewGame(game, openWorld) {
   game.missions.reset?.();
   game.activities.reset?.();
   game.safehouses.reset?.();
+  game.safehouses.grantVehicle?.(ZAYDS_OWN_CAR, 'safehouse_flat'); // his tired hatchback, at the kerb
   game.wanted.clear();
   game.weather.set(0);
   game.time.hour = game.config.newGameHour;
@@ -222,6 +223,8 @@ const RULE_BOOKS = {
 /** The title camera circles this point above The Spires. */
 const TITLE_SHOT = { orbit: { x: 20, y: 46, z: -470 }, radius: 430, height: 52, speed: 0.03, fov: 50 };
 const TITLE_PLAYER_SPOT = { x: 62, z: -420, heading: 0 };
+/** What a new game leaves outside the flat in Al Wadi. */
+const ZAYDS_OWN_CAR = 'dromo_sandpiper';
 let renderScale = 1;
 let shadowInterval = 2;
 let slowFrames = 0;

@@ -41,7 +41,8 @@ export function createGameContext(canvas, options = {}) {
     math: mathUtils,
     rng: createSeededRandom(gameConfig.worldSeed),
     markers: createMarkerRegistry(events),
-    time: { elapsed: 0, dt: 0, realDt: 0, frame: 0, hour: gameConfig.startHour, clockRate: 1, scale: 1, paused: false, fps: 0 },
+    /** `frozen` holds a staged frame still: paused, and the HUD's messages stop timing out. */
+    time: { elapsed: 0, dt: 0, realDt: 0, frame: 0, hour: gameConfig.startHour, clockRate: 1, scale: 1, paused: false, frozen: false, fps: 0 },
     mode: 'loading',
     catalog: {},
     rules: {},
