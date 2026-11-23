@@ -300,19 +300,22 @@ export function createPoliceDispatch(game) {
     let bestLane = null;
     let bestX = 0;
     let bestZ = 0;
+    // In a pursuit units come at the player; in a search, to where he was last seen.
+    const cx = ctx.pursuit ? ctx.px : ctx.searchX;
+    const cz = ctx.pursuit ? ctx.pz : ctx.searchZ;
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      const hit = roads.randomLaneNear(ctx.px, ctx.pz, nearest, farthest, rng);
+      const hit = roads.randomLaneNear(cx, cz, nearest, farthest, rng);
       if (!hit) continue;
       const x = hit.x;
       const z = hit.z;
       const lane = hit.lane;
       if (game.vehicles.nearest(x, z, 10)) continue;
-      const dx = x - ctx.px;
-      const dz = z - ctx.pz;
+      const dx = x - cx;
+      const dz = z - cz;
       const d = Math.sqrt(dx * dx + dz * dz) || 1;
       let score = 0;
       if (ctx.pspeed > 5) score += ((dx * ctx.fx + dz * ctx.fz) / d) * (ctx.level >= 3 ? 3.5 : 2.5);
-      score += Math.min(1.6, separationFromUnits(Math.atan2(dx, dz))) * 1.2;
+      score += Math.min(1.6, separationFromUnits(Math.atan2(dx, dz), cx, cz)) * 1.2;
       if (score <= bestScore) continue;
       if (sight.playerVisibleFrom(x, 1.4, z, 260)) continue;
       bestScore = score;
@@ -322,10 +325,10 @@ export function createPoliceDispatch(game) {
       found = true;
     }
     if (!found) return null;
-    // Face the player: take the lane of the same road that runs toward him.
+    // Face the trouble: take the lane of the same road that runs toward it.
     let lane = bestLane;
-    const towardX = ctx.px - bestX;
-    const towardZ = ctx.pz - bestZ;
+    const towardX = cx - bestX;
+    const towardZ = cz - bestZ;
     if (lane.dirX * towardX + lane.dirZ * towardZ < 0) {
       const lanes = lane.edge ? lane.edge.lanes : null;
       if (lanes) {
@@ -346,13 +349,13 @@ export function createPoliceDispatch(game) {
   }
 
   /** The smallest bearing gap (radians, seen from the player) between `bearing` and any responding unit. */
-  function separationFromUnits(bearing) {
+  function separationFromUnits(bearing, cx, cz) {
     let least = Math.PI;
     const units = roster.units;
     for (let i = 0; i < units.length; i += 1) {
       const unit = units[i];
       if (unit.mode !== 'response' || !unit.vehicle) continue;
-      const other = Math.atan2(unit.vehicle.pos.x - ctx.px, unit.vehicle.pos.z - ctx.pz);
+      const other = Math.atan2(unit.vehicle.pos.x - cx, unit.vehicle.pos.z - cz);
       const gap = Math.abs(game.math.angleDelta(bearing, other));
       if (gap < least) least = gap;
     }
@@ -540,9 +543,14 @@ export function createPoliceDispatch(game) {
   function shouldRemove(unit) {
     const hidden = !unit.visibleToPlayer;
     if (unit.mode === 'leaving') return (hidden && (unit.distance > 150 || unit.modeTime > 45)) || unit.distance > 400;
+    if (unit.mode === 'response' && ctx.level > 0 && !ctx.pursuit) {
+      // Searching: what counts is how far the unit is from the search, not from where he really is.
+      const at = positionOf(unit);
+      if (at && Math.hypot(at.x - ctx.searchX, at.z - ctx.searchZ) < 450) return false;
+    }
     if (unit.distance > 450 && hidden) return true;
     // A car hopelessly behind, that has not seen him for a while, is sent round again (it respawns ahead).
-    if (ctx.level >= 2 && unit.vehicle && hidden && unit.distance > 280 && ctx.now - unit.lastSeen > 10) return true;
+    if (ctx.pursuit && ctx.level >= 2 && unit.vehicle && hidden && unit.distance > 280 && ctx.now - unit.lastSeen > 10) return true;
     if (unit.vehicle && (unit.stuckTime > 9 || unit.flipped) && hidden) return true;
     if (!unit.vehicle && unit.distance > 160 && hidden) return true;
     return false;

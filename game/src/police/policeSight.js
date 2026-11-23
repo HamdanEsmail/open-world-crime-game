@@ -5,6 +5,8 @@ import * as THREE from 'three';
 
 /** Seconds between two sight checks by the same pair of eyes (each unit checks a few times a second). */
 const SIGHT_INTERVAL = 0.25;
+/** A player further than this (squared metres) from where the eyes last looked has jumped: look again now. */
+const JUMP_SQ = 30 * 30;
 /** Metres from which an officer with a clear view notices a crime. */
 export const WITNESS_RANGE = 90;
 /** How far the police pick out the player: behind the wheel, on foot, crouching. */
@@ -28,7 +30,7 @@ export function createPoliceSight(game) {
 
   /** A fresh set of eyes for a police car or an officer; the first check comes at a random moment. */
   function createEyes() {
-    return { timer: Math.random() * SIGHT_INTERVAL, sees: false, distance: Infinity, lastSeen: -1e9 };
+    return { timer: Math.random() * SIGHT_INTERVAL, sees: false, distance: Infinity, lastSeen: -1e9, checkedX: 0, checkedZ: 0 };
   }
 
   /**
@@ -47,8 +49,12 @@ export function createPoliceSight(game) {
     const dz = p.z - z;
     eyes.distance = Math.sqrt(dx * dx + dz * dz);
     eyes.timer -= dt;
-    if (eyes.timer > 0) return eyes.sees;
-    eyes.timer = eyes.timer < -SIGHT_INTERVAL ? SIGHT_INTERVAL * 0.5 : eyes.timer + SIGHT_INTERVAL;
+    // A player who jumped (a respawn, a scripted move) is looked for afresh at once.
+    const jumped = (p.x - eyes.checkedX) * (p.x - eyes.checkedX) + (p.z - eyes.checkedZ) * (p.z - eyes.checkedZ) > JUMP_SQ;
+    if (eyes.timer > 0 && !jumped) return eyes.sees;
+    eyes.checkedX = p.x;
+    eyes.checkedZ = p.z;
+    eyes.timer = eyes.timer < -SIGHT_INTERVAL || jumped ? SIGHT_INTERVAL * 0.5 : eyes.timer + SIGHT_INTERVAL;
     let sees = false;
     if (eyes.distance <= TOUCH_RANGE) {
       sees = true;

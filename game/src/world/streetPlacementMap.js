@@ -5,7 +5,12 @@
 
 const LEDGER_CELL = 8;
 const STRUCTURE_KINDS = new Set(['building', 'wall', 'container', 'landmark']);
-const VEHICLE_LOT_USES = new Set(['parking', 'carLot', 'truckYard', 'scrapYard', 'policeYard', 'containerYard']);
+const VEHICLE_LOT_USES = new Set(['parking', 'carLot', 'truckYard', 'scrapYard', 'policeYard', 'containerYard', 'hotelForecourt']);
+/** Lots whose bays fill with parked cars from this many metres in from every edge. */
+export const PARKED_LOT_USES = new Set(['parking', 'carLot', 'policeYard', 'truckYard', 'hotelForecourt']);
+export const PARKING_MARGIN = 2.5;
+/** Lots entered by one central driveway of this width rather than along their whole street side. */
+const DRIVEWAY_WIDTH = { hotelForecourt: 26 };
 
 /**
  * Build the placement map from game.city, game.roads, game.terrain and game.colliders.
@@ -338,15 +343,41 @@ export function createStreetPlacementMap(game) {
       if (!VEHICLE_LOT_USES.has(lot.use)) continue;
       const block = city.blocks[lot.block];
       if (!block) continue;
+      if (PARKED_LOT_USES.has(lot.use)) keepBaysClear(lot);
       const bl = block.lot;
       const touches = { n: lot.z0 - bl.z0 < 14, s: bl.z1 - lot.z1 < 14, w: lot.x0 - bl.x0 < 14, e: bl.x1 - lot.x1 < 14 };
+      const driveway = DRIVEWAY_WIDTH[lot.use];
       for (const edge of ['n', 's', 'w', 'e']) {
-        if (!touches[edge]) continue;
+        if (!touches[edge] || (driveway && edge !== lot.front)) continue;
         const alongX = edge === 'n' || edge === 's';
-        const from = alongX ? lot.x0 + 3 : lot.z0 + 3;
-        const to = alongX ? lot.x1 - 3 : lot.z1 - 3;
+        let from = alongX ? lot.x0 + 3 : lot.z0 + 3;
+        let to = alongX ? lot.x1 - 3 : lot.z1 - 3;
+        if (driveway) {
+          const mid = (from + to) / 2;
+          from = mid - driveway / 2;
+          to = mid + driveway / 2;
+        }
         for (const run of runsBesideBlockEdge(block, edge)) reserveSpan(run, from, to);
       }
+    }
+  }
+
+  /** Cover a lot's parking bays (all but its outer margin) so nothing is placed where cars park. */
+  function keepBaysClear(lot) {
+    const radius = 3;
+    const x0 = lot.x0 + PARKING_MARGIN + radius;
+    const x1 = lot.x1 - PARKING_MARGIN - radius;
+    const z0 = lot.z0 + PARKING_MARGIN + radius;
+    const z1 = lot.z1 - PARKING_MARGIN - radius;
+    if (x1 < x0 || z1 < z0) {
+      take((lot.x0 + lot.x1) / 2, (lot.z0 + lot.z1) / 2, Math.max(0.5, Math.min(lot.x1 - lot.x0, lot.z1 - lot.z0) / 2 - PARKING_MARGIN));
+      return;
+    }
+    const step = 4.2;
+    const nx = Math.max(1, Math.ceil((x1 - x0) / step));
+    const nz = Math.max(1, Math.ceil((z1 - z0) / step));
+    for (let i = 0; i <= nx; i += 1) {
+      for (let j = 0; j <= nz; j += 1) take(x0 + ((x1 - x0) * i) / nx, z0 + ((z1 - z0) * j) / nz, radius);
     }
   }
 }

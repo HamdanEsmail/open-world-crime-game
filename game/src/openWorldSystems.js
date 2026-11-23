@@ -76,6 +76,7 @@ export function updateOpenWorld(game, dt) {
   game.cityServices.update(dt);
   game.phone.update(dt);
   game.cutscenes.update(dt);
+  if (game.staging) game.staging.update(dt); // a staged screenshot scene directs its actors here
   // 2. The world moves: cars first, so the people sitting in them ride exactly with them.
   game.vehicles.update(dt);
   game.characters.update(dt);

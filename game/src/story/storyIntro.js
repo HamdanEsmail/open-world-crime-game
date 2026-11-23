@@ -43,8 +43,8 @@ export function openingShots(game) {
       text: 'Port Sarab. Glass towers, gold sand, and other people\'s money.',
     },
     {
-      position: { x: spire.x + 78, y: 3.5, z: spire.z + 118 },
-      moveTo: { x: spire.x + 52, y: 6, z: spire.z + 96 },
+      position: { x: spire.x + 50, y: 2.4, z: spire.z + 74 },
+      moveTo: { x: spire.x + 36, y: 4.5, z: spire.z + 60 },
       lookAt: { x: spire.x, y: 190, z: spire.z },
       seconds: 6,
       fov: 58,

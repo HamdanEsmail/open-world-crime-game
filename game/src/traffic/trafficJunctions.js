@@ -118,16 +118,15 @@ export function createTrafficJunctions(game, traffic) {
       const otherPath = other.path;
       if (!otherPath || otherPath.node !== node) continue;
       if (!pathsConflict(path, otherPath)) continue;
-      const standing = other.stillTime > 4;
       if (other.phase === 1) {
-        if (impatient && standing) continue;
         if (otherPath.length - other.pathS > CLEARING_DISTANCE) return waitFor(state, other);
         continue;
       }
       if (other.lane !== otherPath.from) continue;
-      if (impatient && standing) continue;
       const otherEta = Math.max(0, other.distToLine) / Math.max(1.5, other.vehicle.speed);
       if (other.committed && (other.distToLine < 4 || otherEta < 6)) return waitFor(state, other);
+      // Impatience only ever overrides a car still waiting at its own line, never one in the box.
+      if (impatient && other.stillTime > 4) continue;
       if (other.distToLine > 26) continue;
       if (node.signal && !other.signalGo) continue;
       if (!node.signal) {

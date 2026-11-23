@@ -75,7 +75,7 @@ async function openAtMinasStall(m, scene) {
   await m.cutscene([
     framedShot(m, contact, { distance: 34, height: 11, yaw: 0.35, lookHeight: 4, seconds: 4.2, drift: 10,
       speaker: 'mina', text: 'Every Sunday Vane\'s gold leaves the Spire in an armoured truck.' }),
-    framedShot(m, pair, { distance: 5.4, height: 1.75, yaw: 0.9, lookHeight: 1.55, seconds: 4,
+    framedShot(m, pair, { distance: 5.2, height: 1.7, yaw: 0.35, lookHeight: 1.5, seconds: 4,
       speaker: 'mina', text: 'Where it goes after that, nobody knows. Today you find out.' }),
     framedShot(m, pair, { distance: 4.6, height: 1.7, yaw: -0.4, lookHeight: 1.55, seconds: 2.8,
       speaker: 'zayd', text: 'A tail. No ramming?' }),

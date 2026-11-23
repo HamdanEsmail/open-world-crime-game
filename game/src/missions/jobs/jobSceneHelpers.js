@@ -398,7 +398,7 @@ export function pitchJackalCamp(m, centre, { radius = 24, facing = 0 } = {}) {
   const yAxis = new THREE.Vector3(0, 1, 0);
   for (let i = 0; i < 7; i += 1) {
     const stackBase = i < 4 ? i : i - 4;
-    const angle = facing + Math.PI * 0.5 + (stackBase - 1.5) * 0.12;
+    const angle = facing - Math.PI * 0.5 + (stackBase - 1.5) * 0.12;
     const r = radius * 0.72;
     const x = centre.x + Math.sin(angle) * r;
     const z = centre.z + Math.cos(angle) * r;

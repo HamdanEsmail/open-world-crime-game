@@ -63,9 +63,9 @@ async function openOnTheNightShift(m, scene) {
   await m.cutscene([
     framedShot(m, scene.cranes, { distance: 150, height: 55, yaw: 2.6, lookHeight: 20, seconds: 4.4, drift: 30,
       speaker: 'tavi', text: 'Night shift at Mina Docks. Vane\'s crates never wait for morning.' }),
-    framedShot(m, pair, { distance: 5.5, height: 1.8, yaw: -0.9, lookHeight: 1.6, seconds: 4, drift: 0.6,
+    framedShot(m, pair, { distance: 5.2, height: 1.75, yaw: 2.75, lookHeight: 1.6, seconds: 4, drift: 0.6,
       speaker: 'tavi', text: 'Sahel Hauler in the yard by Pier Nine. Manifest says machine parts.' }),
-    framedShot(m, pair, { distance: 4.8, height: 1.7, yaw: 2.3, lookHeight: 1.6, seconds: 2.6,
+    framedShot(m, pair, { distance: 4.8, height: 1.7, yaw: -1.35, lookHeight: 1.6, seconds: 2.6,
       speaker: 'zayd', text: 'And what does the truck say?' }),
     framedShot(m, scene.hauler, { distance: 19, height: 4.5, yaw: scene.roadSide + 0.45, lookHeight: 1.8, seconds: 4.4, drift: 5,
       speaker: 'tavi', text: 'Smelting gear. Vane melts down what he steals. Jackals all over it.' }),

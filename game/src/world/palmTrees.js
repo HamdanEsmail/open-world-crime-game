@@ -219,14 +219,15 @@ export function createPalmTrees(game, kit) {
         }
         break;
       case 'hotelForecourt':
-        for (let z = lot.z0 + 4; z <= lot.z1 - 4; z += 11) {
-          plantDatePalm(lot.x0 + 5, z, { scale: 1.25 });
-          plantDatePalm(lot.x1 - 5, z, { scale: 1.25 });
+        // Cars park in the bays, so the palms ring the forecourt in its outer margin, clear of the drive.
+        for (let z = lot.z0 + 1.3; z <= lot.z1 - 1.3; z += 11) {
+          plantDatePalm(lot.x0 + 1.3, z, { scale: 1.25, claim: 0.8 });
+          plantDatePalm(lot.x1 - 1.3, z, { scale: 1.25, claim: 0.8 });
         }
-        for (let x = lot.x0 + 16; x <= lot.x1 - 16; x += 12) {
+        for (let x = lot.x0 + 12; x <= lot.x1 - 12; x += 12) {
           if (Math.abs(x - cx) < 14) continue;
-          plantDatePalm(x, lot.z1 - 4, { scale: 1.2 });
-          plantFloweringTree(x + 6, lot.z0 + 6);
+          plantDatePalm(x, lot.z1 - 1.3, { scale: 1.2, claim: 0.8 });
+          plantShrub(x + 6, lot.z0 + 1.2, { claim: 0.7 });
         }
         break;
       case 'playground':

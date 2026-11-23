@@ -45,6 +45,16 @@ export function createFollowCamera(game) {
       rig.yaw = yaw;
       lastManualLook = -10;
     },
+    /** Hold a chosen view (yaw and tilt) as if the player were steering the camera by hand; null lets it swing free again. */
+    holdView(yaw, pitch) {
+      if (yaw === null || yaw === undefined) {
+        lastManualLook = -10;
+        return;
+      }
+      rig.yaw = yaw;
+      if (pitch !== undefined) rig.pitch = pitch;
+      lastManualLook = Infinity;
+    },
     /**
      * Take the camera away from the player: { position, lookAt, fov } for a fixed shot, or
      * { orbit: {x, y, z}, radius, height, speed, fov } for a slow circling shot; null gives it back.

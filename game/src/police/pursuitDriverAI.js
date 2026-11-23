@@ -68,9 +68,17 @@ export function createPursuitDriver(game) {
     const drive = unit.drive;
     const p = vehicle.pos;
     drive.routeAge += dt;
-    const driftSq = (drive.routeTargetX - ctx.targetX) ** 2 + (drive.routeTargetZ - ctx.targetZ) ** 2;
-    if (drive.routeCount === 0 || driftSq > 35 * 35 || drive.routeAge > (ctx.pursuit ? 3.5 : 9)) {
-      roads.planRoute(drive, p.x, p.z, ctx.targetX, ctx.targetZ);
+    // A suspect on the move is headed off: route to where he will be by the time the car gets there.
+    let tx = ctx.targetX;
+    let tz = ctx.targetZ;
+    if (ctx.pursuit && !ctx.onFoot) {
+      const lead = Math.min(5, unit.distance / 40);
+      tx += ctx.pvx * lead;
+      tz += ctx.pvz * lead;
+    }
+    const driftSq = (drive.routeTargetX - tx) ** 2 + (drive.routeTargetZ - tz) ** 2;
+    if (drive.routeCount === 0 || driftSq > 40 * 40 || drive.routeAge > (ctx.pursuit ? 3.5 : 9)) {
+      roads.planRoute(drive, p.x, p.z, tx, tz);
     }
     const speed = Math.abs(vehicle.speed);
     const remaining = roads.followRoute(drive, p.x, p.z, 10 + speed * 0.55, aim);
@@ -79,7 +87,7 @@ export function createPursuitDriver(game) {
     if (!ctx.pursuit && remaining < 40) pace = Math.min(pace, 9 + remaining * 0.4);
     steerAndDrive(unit, aim.x, aim.z, pace, false, 3, ctx, dt);
     rubberBand(unit, ctx, dt);
-    if (ctx.pursuit && unit.distance < (ctx.onFoot ? 45 : 95) && (unit.sees || unit.distance < 35)) {
+    if (ctx.pursuit && unit.distance < (ctx.onFoot ? 45 : 130) && (unit.sees || unit.distance < 35)) {
       unit.state = 'chasing';
       drive.losTimer = 0;
     } else if (!ctx.pursuit && remaining < 22) {

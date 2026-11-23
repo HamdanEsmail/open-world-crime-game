@@ -58,11 +58,12 @@ export function createStreetLamps(game, kit) {
     } else lampsAlong(run, style, run.side > 0 ? 18 : 2, 32, 0.65);
   }
 
-  // Masts over the container yards and truck yards, and a row along the port quay.
+  // Masts in the corners of the container yards and truck yards (clear of the parking bays), and a
+  // row along the port quay.
   for (const lot of city.openLots) {
     if (lot.use !== 'containerYard' && lot.use !== 'truckYard') continue;
     for (const [fx, fz] of [[0, 0], [1, 1]]) {
-      placeLamp('lampMast', lot.x0 + 3.5 + fx * (lot.x1 - lot.x0 - 7), lot.z0 + 3.5 + fz * (lot.z1 - lot.z0 - 7), 0, 1.5);
+      placeLamp('lampMast', lot.x0 + 1.5 + fx * (lot.x1 - lot.x0 - 3), lot.z0 + 1.5 + fz * (lot.z1 - lot.z0 - 3), 0, 0.95);
     }
   }
   const port = city.coast.port;

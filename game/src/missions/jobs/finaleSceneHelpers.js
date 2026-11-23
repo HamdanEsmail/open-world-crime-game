@@ -18,14 +18,7 @@ export function spireStage(m) {
   const doorPlace = m.place('vane_spire_door') || { x: mark.x, z: lot.z1 + 2.5, curbX: mark.x, curbZ: lot.z1 + 7.2, heading: Math.PI };
   const towerSouth = mark.z + d / 2;
   return {
-    x: mark.x,
-    z: mark.z,
-    w,
-    d,
-    h,
-    towerSouth,
-    towerWest: mark.x - w / 2,
-    towerEast: mark.x + w / 2,
+    x: mark.x, z: mark.z, w, d, h, towerSouth, towerWest: mark.x - w / 2, towerEast: mark.x + w / 2,
     plaza: { x0: lot.x0, x1: lot.x1, z0: lot.z0, z1: lot.z1 },
     /** The lobby doors, on the plaza just in front of the tower's south face. */
     door: { x: mark.x, z: towerSouth + 2.6 },
@@ -528,7 +521,7 @@ export function buildGoldShares(m, x, z, heading = 0, shares = 4) {
   };
   const group = new THREE.Group();
   group.name = 'gold-shares';
-  const goldMat = keep(new THREE.MeshStandardMaterial({ color: 0xf2c04a, emissive: 0x6a3c00, emissiveIntensity: 0.55, metalness: 0.5, roughness: 0.32 }));
+  const goldMat = keep(new THREE.MeshStandardMaterial({ color: 0xffd65c, emissive: 0x7a5000, emissiveIntensity: 0.6, metalness: 0.4, roughness: 0.3 }));
   const clothMat = keep(new THREE.MeshLambertMaterial({ color: 0x2c2f38 }));
   const piles = [];
   for (let i = 0; i < shares; i += 1) piles.push({ x: (i - (shares - 1) / 2) * 1.9, z: 0, layers: 3 });
@@ -573,6 +566,7 @@ export function stackGoldBars(THREE, pallets, material, keep, scale = 1) {
   const mesh = new THREE.InstancedMesh(keep(new THREE.BoxGeometry(barW, barH, barD)), material, count);
   const matrix = new THREE.Matrix4();
   const rotation = new THREE.Matrix4();
+  const tone = new THREE.Color();
   let index = 0;
   for (const pallet of pallets) {
     for (let layer = 0; layer < pallet.layers; layer += 1) {
@@ -582,11 +576,16 @@ export function stackGoldBars(THREE, pallets, material, keep, scale = 1) {
       const crosswise = layer % 2 === 1;
       for (let i = 0; i < across; i += 1) {
         for (let j = 0; j < deep; j += 1) {
-          const lx = (i - (across - 1) / 2) * (barW + 0.02 * scale);
-          const lz = (j - (deep - 1) / 2) * (barD + 0.03 * scale);
+          const lx = (i - (across - 1) / 2) * (barW + 0.035 * scale);
+          const lz = (j - (deep - 1) / 2) * (barD + 0.045 * scale);
           rotation.makeRotationY(crosswise ? 0.04 : -0.03);
-          matrix.makeTranslation(pallet.x + lx, 0.16 * scale + barH / 2 + layer * barH, pallet.z + lz).multiply(rotation);
-          if (index < count) mesh.setMatrixAt(index, matrix);
+          matrix.makeTranslation(pallet.x + lx, 0.16 * scale + barH / 2 + layer * (barH + 0.012 * scale), pallet.z + lz).multiply(rotation);
+          if (index < count) {
+            mesh.setMatrixAt(index, matrix);
+            // Each bar a shade of its own, so the stacks read as bars and not as one block.
+            const shade = 0.78 + 0.22 * (((i * 7 + j * 13 + layer * 5) % 9) / 8);
+            mesh.setColorAt(index, tone.setRGB(shade, shade * 0.97, shade * 0.9));
+          }
           index += 1;
         }
       }
@@ -594,6 +593,7 @@ export function stackGoldBars(THREE, pallets, material, keep, scale = 1) {
   }
   mesh.count = Math.min(index, count);
   mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   mesh.frustumCulled = false;
   return mesh;
 }

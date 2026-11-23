@@ -28,6 +28,10 @@ export const job = {
       valet = m.spawnPerson({ archetype: 'business', kind: 'civilian', name: 'Valet', x: forecourt.x - 2.5, z: forecourt.z - 3.2, heading: Math.PI });
       const mina = m.giver || m.spawnCast('mina', stall.x, stall.z, stall.heading + Math.PI);
       m.teleportPlayer(stall.x - 1.4, stall.z + 2.6, Math.PI - 0.5);
+      if (mina && mina.intent) {
+        mina.intent.faceYaw = Math.atan2(m.player.pos.x - mina.pos.x, m.player.pos.z - mina.pos.z);
+        mina.intent.gesture = 'talk';
+      }
       await m.cutscene(introShots(stall, mina, m.player.character, forecourt));
       m.objective('Steal the Oryx Summit at the Mirage Grand Hotel');
     }

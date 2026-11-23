@@ -64,9 +64,9 @@ async function openAtHaddadMotors(m, scene) {
   await m.cutscene([
     framedShot(m, scene.garage, { distance: 64, height: 22, yaw: 0.25, lookHeight: 3, seconds: 4.4, drift: 16,
       speaker: 'faris', text: 'They took her, Dust. My Dune Jackal. Called it sand tax.' }),
-    framedShot(m, pair, { distance: 5.4, height: 1.7, yaw: -0.3, lookHeight: 1.55, seconds: 4,
+    framedShot(m, pair, { distance: 5, height: 1.7, yaw: 2.65, lookHeight: 1.55, seconds: 4,
       speaker: 'faris', text: 'Twelve years I tuned that buggy. She knows my hands.' }),
-    framedShot(m, pair, { distance: 4.6, height: 1.75, yaw: 2.6, lookHeight: 1.55, seconds: 2.4,
+    framedShot(m, pair, { distance: 4.6, height: 1.75, yaw: -0.5, lookHeight: 1.55, seconds: 2.4,
       speaker: 'zayd', text: 'Where?' }),
     framedShot(m, scene.nomad, { distance: 9, height: 2.6, yaw: scene.nomad.heading + 2.3, lookHeight: 1, seconds: 4.2, drift: 2,
       speaker: 'faris', text: 'Ain Zahra oasis. Sayf\'s boys camp there when the wind is wrong.' }),
@@ -141,9 +141,9 @@ async function driveOutToTheOasis(m, scene) {
   await m.cutscene([
     framedShot(m, scene.campCentre, { distance: 70, height: 26, yaw: scene.approachAngle + 0.35, lookHeight: 0, seconds: 4.2, drift: 18,
       speaker: 'zayd', text: 'I see her. Saffron paint, roll cage.' }),
-    framedShot(m, scene.buggy, { distance: 9, height: 2.4, yaw: scene.buggy.heading + 2.2, lookHeight: 0.8, seconds: 3.4, drift: 2,
+    framedShot(m, scene.buggy, { distance: 7, height: 2.2, yaw: scene.buggy.heading + 0.9, lookHeight: 0.8, seconds: 3.4, drift: 1.5,
       speaker: 'faris', text: 'My baby! Is she hurt? Is she scratched?' }),
-    framedShot(m, scene.campCentre, { distance: 16, height: 4, yaw: scene.approachAngle - 0.5, lookHeight: 1.2, seconds: 3.6,
+    framedShot(m, scene.campCentre, { distance: 21, height: 8.5, yaw: scene.approachAngle - 0.35, lookHeight: 1, seconds: 3.6, drift: 3,
       speaker: 'zayd', text: 'She\'s fine. Four rifles round the fire. More asleep in the tents.' }),
   ]);
   chatter(m, [['faris', 'Ah. Small problem.']]);

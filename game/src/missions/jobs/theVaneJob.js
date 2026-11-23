@@ -116,12 +116,24 @@ async function openingInTheStorm(ctx) {
     overShoulder(m, mina, zayd, { seconds: 3.5, side: -1, back: 1.0, speaker: 'mina', text: 'Wave nicely. And Dust? Come back.' }),
   ]);
   faceTo(tavi, spire.door);
+  lookAtThePlaza(ctx);
+}
+
+/** Hand the camera back pointing up the plaza at the lobby doors, where the fight is. */
+function lookAtThePlaza(ctx) {
+  const { m, spire } = ctx;
+  const me = m.game.player.character;
+  if (!me) return;
+  m.game.cameraRig?.setYaw?.(Math.atan2(spire.door.x - me.pos.x, spire.door.z - me.pos.z));
 }
 
 /** Three pushes across the plaza: the posted guards, both flanks, and the heavies at the doors. */
 async function fightAcrossThePlaza(ctx) {
   const { m, voice, spire } = ctx;
-  if (ctx.guards.length === 0) ctx.guards = postGuards(ctx, 4, { x: spire.x, z: spire.towerSouth + 24, radius: 15 });
+  if (ctx.guards.length === 0) {
+    ctx.guards = postGuards(ctx, 4, { x: spire.x, z: spire.towerSouth + 24, radius: 15 });
+    lookAtThePlaza(ctx);
+  }
   for (const guard of ctx.guards) m.hostile(guard, { accuracy: 0.3, style: 'cover' });
   voice.talk([
     ['Aurum Security', 'Contact! Plaza, south side! Weapons free!'],
@@ -386,7 +398,7 @@ function buildVaultSet(m, centre) {
   const stormGlass = keep(new THREE.MeshBasicMaterial({ color: 0xf2a040, transparent: true, opacity: 0.92 }));
   const steel = keep(new THREE.MeshLambertMaterial({ color: 0x8d8f94, emissive: 0x2a2418 }));
   const palletMat = keep(new THREE.MeshLambertMaterial({ color: 0x6b4a2e, emissive: 0x1a0f05 }));
-  const goldMat = keep(new THREE.MeshStandardMaterial({ color: 0xf2c04a, emissive: 0x7a4800, emissiveIntensity: 0.85, metalness: 0.45, roughness: 0.3 }));
+  const goldMat = keep(new THREE.MeshStandardMaterial({ color: 0xffd65c, emissive: 0x9a6400, emissiveIntensity: 1.0, metalness: 0.35, roughness: 0.28 }));
   const add = (geometry, material, x, y, z) => {
     const mesh = new THREE.Mesh(keep(geometry), material);
     mesh.position.set(x, y, z);
@@ -427,7 +439,7 @@ function buildVaultSet(m, centre) {
   const glows = [];
   const effects = m.game.effects;
   if (effects && effects.glows && effects.glows.add) {
-    for (const [gx, gy, gz, size] of [[0, 5.6, -2, 9], [-6, 5.4, 2, 6], [6, 5.4, 2, 6], [0, 1.2, -4.4, 7]]) {
+    for (const [gx, gy, gz, size] of [[0, 5.6, -2, 9], [-6, 5.4, 2, 6], [6, 5.4, 2, 6], [0, 1.2, -4.4, 7], [0, 5.8, 4, 7]]) {
       glows.push(effects.glows.add({ x: centre.x + gx, y: centre.y + gy, z: centre.z + gz, color: 0xffb347, size }));
     }
   }

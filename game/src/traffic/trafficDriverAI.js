@@ -446,9 +446,13 @@ export function createTrafficDriverAI(game, traffic, junctions) {
       if (state.obstacleIsPerson) blocked = true;
       else if (thing) {
         const other = thing.ai;
-        const queueing = other && other.system === 'traffic' && other.role === 'driver' && !thing.wrecked
+        // Two cars each stopped for the other (a face-off in a junction) are not a queue.
+        const faceOff = !!other && other.obstacle === vehicle;
+        const queueing = other && other.system === 'traffic' && other.role === 'driver' && !thing.wrecked && !faceOff
           && other.mode !== 'abandoned' && other.mode !== 'confront' && other.blockedTime < 3;
         blocked = !queueing;
+        // In a face-off one of the two backs off a little to let the other through.
+        if (faceOff && state.blockedTime > 2 && vehicle.id > thing.id && state.reverseTime <= 0) startReversing(state, 1.5, 0);
       }
     }
     state.blockedTime = blocked ? state.blockedTime + thinkDt : Math.max(0, state.blockedTime - thinkDt * 3);
@@ -478,7 +482,7 @@ export function createTrafficDriverAI(game, traffic, junctions) {
       const sibling = edge.lanes[i];
       if (sibling.from !== lane.from || Math.abs(sibling.index - lane.index) !== 1) continue;
       const side = (sibling.index - lane.index) * laneWidth;
-      if (!stretchClear(state, side - 1.6, side + 1.6, -10, ahead + 14)) continue;
+      if (!stretchClear(state, side - 1.6, side + 1.6, -28, ahead + 14)) continue;
       moveToLane(state, sibling);
       return true;
     }

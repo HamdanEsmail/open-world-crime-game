@@ -62,6 +62,8 @@ export function createMissionRunner(game) {
     available,
     guideTo,
     reset,
+    /** End a playing cutscene now (its m.cutscene resolves on the next frame). */
+    skipCutscene: () => game.cutscenes?.skip?.(),
     update,
     serialize,
     deserialize,

@@ -17,6 +17,7 @@ export const job = {
   async run(m) {
     const garage = m.place('contact_faris');
     const bay = { x: garage.curbX + 3, z: garage.curbZ + 1.4 };
+    m.clearArea(bay.x, bay.z, 14);
     const car = parkTheSirocco(m, bay);
 
     if (m.resumeFrom === 'lap') {
@@ -24,6 +25,7 @@ export const job = {
     } else {
       const faris = m.giver || m.spawnCast('faris', garage.x, garage.z, garage.heading + Math.PI);
       m.teleportPlayer(garage.x + 1.6, garage.z + 2.6, Math.PI + 0.55);
+      turnToward(faris, m.player.character);
       await m.cutscene(introShots(garage, car, faris, m.player.character));
       m.objective('Get in the Sirocco');
       m.say([['faris', 'Mind the paint. She is older than your career.']]);
@@ -54,9 +56,11 @@ export const job = {
     else m.trust(3, 'Faris nods');
     if (condition < 0.6) m.trust(-2, 'Faris counts the dents');
 
-    const outro = m.cutscene(outroShots(garage, bay, spare, m.giver || m.spawnCast('faris', garage.x, garage.z, garage.heading + Math.PI), m.player.character));
+    const faris = m.giver || m.spawnCast('faris', garage.x, garage.z, garage.heading + Math.PI);
+    const outro = m.cutscene(outroShots(garage, bay, spare, faris, m.player.character));
     await m.seconds(0.24);
     m.teleportPlayer(garage.x + 1.6, garage.z + 2.6, Math.PI + 0.55);
+    turnToward(faris, m.player.character);
     await outro;
 
     m.callAfter('dahan', [
@@ -67,6 +71,13 @@ export const job = {
     ], 7);
   },
 };
+
+/** Have one person face another while they talk. */
+function turnToward(person, other) {
+  if (!person || !other || !person.intent) return;
+  person.intent.faceYaw = Math.atan2(other.pos.x - person.pos.x, other.pos.z - person.pos.z);
+  person.intent.gesture = 'talk';
+}
 
 /** Faris's coral Sirocco, parked in the bay outside his garage facing west toward the Gate. */
 function parkTheSirocco(m, bay) {
@@ -79,7 +90,7 @@ function introShots(garage, car, faris, zayd) {
   const lookFaris = faris || { x: fx, y: 1.6, z: fz };
   const lookZayd = zayd || { x: fx + 1.6, y: 1.6, z: fz + 2.6 };
   return [
-    { position: { x: fx + 30, y: 6.5, z: fz + 24 }, moveTo: { x: fx + 22, y: 5.2, z: fz + 19 }, lookAt: { x: fx, y: 2.4, z: fz + 2 }, seconds: 4.2, speaker: 'faris', text: 'Dust Karam. Thinner, poorer, same scowl.' },
+    { position: { x: fx + 26, y: 4.2, z: fz + 12 }, moveTo: { x: fx + 17, y: 3.4, z: fz + 10.5 }, lookAt: { x: fx, y: 1.8, z: fz + 2 }, seconds: 4.2, speaker: 'faris', text: 'Dust Karam. Thinner, poorer, same scowl.' },
     { position: { x: fx - 1.1, y: 1.8, z: fz - 1.5 }, moveTo: { x: fx - 0.9, y: 1.78, z: fz - 1.2 }, lookAt: lookZayd, seconds: 2.6, speaker: 'zayd', text: 'Hello, Uncle.' },
     { position: { x: fx + 3.4, y: 1.8, z: fz + 4.8 }, moveTo: { x: fx + 2.8, y: 1.75, z: fz + 4.0 }, lookAt: lookFaris, seconds: 4.0, speaker: 'faris', text: 'Mina wants proof the hands still work. So do I.' },
     { position: { x: car.pos.x - 7, y: 1.0, z: car.pos.z + 4.5 }, moveTo: { x: car.pos.x - 3.5, y: 0.8, z: car.pos.z + 5 }, lookAt: car, seconds: 4.6, fov: 50, speaker: 'faris', text: 'Southgate, out the Gate, round the Dune Highway and home.' },

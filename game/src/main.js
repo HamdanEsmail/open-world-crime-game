@@ -50,7 +50,7 @@ async function bootPortSarab() {
   listenToMenusAndSettings(game, openWorld);
   spawnPlayerAtTheFlat(game);
 
-  startGameLoop(
+  game.loop = startGameLoop(
     game,
     (dt) => openWorld.updateOpenWorld(game, dt),
     () => {
@@ -121,8 +121,10 @@ function continueSavedGame(game, slot) {
   beginPlaying(game);
 }
 
-/** Give the player the controls. */
+/** Give the player the controls, on streets already full of cars and people. */
 function beginPlaying(game) {
+  game.traffic.populateNow();
+  game.pedestrians.refill();
   game.cameraRig.setCinematic(null);
   game.mode = 'playing';
   game.time.paused = false;

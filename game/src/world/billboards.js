@@ -41,7 +41,9 @@ export function createBillboards(game, kit) {
     const cos = Math.cos(yaw);
     const sin = Math.sin(yaw);
     const legX = 3.8;
-    if (!map.isFree(x + legX * cos, z - legX * sin, 1.2) || !map.isFree(x - legX * cos, z + legX * sin, 1.2) || !map.isFree(x, z, 2.5)) return null;
+    const legClear = options.tight ? 0.9 : 1.2;
+    const middleClear = options.tight ? 0.9 : 2.5;
+    if (!map.isFree(x + legX * cos, z - legX * sin, legClear) || !map.isFree(x - legX * cos, z + legX * sin, legClear) || !map.isFree(x, z, middleClear)) return null;
     map.take(x, z, BOARD_W / 2 + 0.5);
     const y = Math.min(kit.ground(x + legX * cos, z - legX * sin), kit.ground(x - legX * cos, z + legX * sin));
     const record = createPropRecord({ kind: 'billboard', x, y, z, yaw, range: options.range || 1500, footprint: 0.4 });
@@ -59,7 +61,7 @@ export function createBillboards(game, kit) {
 
   /** A tall pole sign (car lots, roadside diners). */
   function addTotem(x, z, yaw, ad) {
-    if (!map.claim(x, z, 1.0)) return null;
+    if (!map.claim(x, z, 0.9)) return null;
     const y = kit.ground(x, z);
     const record = createPropRecord({ kind: 'totemSign', x, y, z, yaw, range: 900, footprint: 0.35 });
     kit.addCollider(record, { type: 'post', x, z, radius: 0.32, y0: y, y1: y + TOTEM_Y + 1, kind: 'signpost' });
@@ -83,7 +85,7 @@ export function createBillboards(game, kit) {
       const spot = lotFrontage(lot, block.lot);
       if (!spot) continue;
       if (lot.use === 'carLot') addTotem(spot.cornerX, spot.cornerZ, spot.yaw, rng.pick([1, 12, 8]));
-      else if (rng.chance(0.65)) addBoard(spot.x, spot.z, spot.yaw + rng.range(-0.15, 0.15), { range: 1100 });
+      else if (rng.chance(0.65)) addBoard(spot.x, spot.z, spot.yaw + rng.range(-0.04, 0.04), { range: 1100, tight: true });
     }
     const parkway = city.streets[city.streets.length - 1];
     const setback = city.roadKinds[parkway.kind].width / 2 + map.sidewalk + 10;
@@ -112,9 +114,9 @@ export function createBillboards(game, kit) {
     }
   }
 
-  /** Where a lot meets its road: the middle of that edge (3 m in) and a front corner, facing out. */
+  /** Where a lot meets its road: the middle of that edge and a front corner, inside the margin the parked cars leave. */
   function lotFrontage(lot, blockLot) {
-    const inset = 3;
+    const inset = 1.2;
     switch (lot.front) {
       case 'n': if (lot.z0 - blockLot.z0 > 2) return null;
         return { x: (lot.x0 + lot.x1) / 2, z: lot.z0 + inset, yaw: Math.PI, cornerX: lot.x0 + inset, cornerZ: lot.z0 + inset };

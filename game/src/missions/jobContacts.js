@@ -194,10 +194,14 @@ export function createJobContacts(game, board) {
     const place = post.place;
     const who = game.story && game.story.speaker ? game.story.speaker(post.castId) : { name: post.castId, color: '#e9b44c' };
     const name = who.name || post.castId;
+    // The ring lies just in front of the giver, where Zayd stands to talk.
+    const out = place.heading + Math.PI;
+    const x = place.x + Math.sin(out) * 2;
+    const z = place.z + Math.cos(out) * 2;
     return game.markers.add({
       kind: 'contact',
       letter: place.letter || name.charAt(0).toUpperCase(),
-      pos: { x: place.x, y: game.terrain ? game.terrain.heightAt(place.x, place.z) : 0, z: place.z },
+      pos: { x, y: game.terrain ? game.terrain.heightAt(x, z) : 0, z },
       label: `${name}: ${job.title}`,
       hint: job.hint || `${name} has work: "${job.title}"`,
       color: hexColor(who.color, 0xe9b44c),
