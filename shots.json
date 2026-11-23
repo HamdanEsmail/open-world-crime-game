@@ -1,5 +1,6 @@
 [
-  { "name": "1-start.jpg", "query": "?shot=start&seed=1" },
-  { "name": "2-play.jpg", "query": "?shot=play&seed=1" },
-  { "name": "3-end.jpg", "query": "?shot=end&seed=1" }
+  { "name": "1-getaway-chase-three-stars.jpg", "query": "?shot=chase" },
+  { "name": "2-khamsin-vault-gunfight.jpg", "query": "?shot=storm" },
+  { "name": "3-dune-buggy-escape.jpg", "query": "?shot=dunes" },
+  { "name": "4-title-screen-port-sarab.jpg", "query": "?shot=title" }
 ]

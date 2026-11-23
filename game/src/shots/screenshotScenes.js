@@ -50,10 +50,11 @@ async function buggyEscapeOverTheDunes(game, stage) {
   const chasers = game.vehicles.list
     .filter((vehicle) => vehicle !== buggy && vehicle.tags.mission && vehicle.driver && !vehicle.wrecked)
     .sort((a, b) => a.pos.distanceToSquared(buggy.pos) - b.pos.distanceToSquared(buggy.pos));
-  stage.formUp(buggy, chasers, [[8.5, 9, -0.07], [-6, 11, 0.06]]);
+  stage.formUp(buggy, chasers, [[7, 7.5, -0.07], [-5.5, 9.5, 0.06]]);
+  game.cameraRig.setDistance(2); // the close chase camera
   game.cameraRig.holdView(buggy.heading + 0.3, 0.1);
   game.cameraRig.snap();
-  await stage.play(0.35);
+  await stage.play(0.55); // long enough for the chasers to throw up their sand
 }
 
 /**
@@ -70,7 +71,15 @@ async function vaneJobGunfightInTheKhamsin(game, stage) {
   const zayd = game.player.character;
   zayd.tags.invulnerable = true;
   await stage.play(2.5);
-  const target = guards().sort((a, b) => a.pos.distanceToSquared(zayd.pos) - b.pos.distanceToSquared(zayd.pos))[0];
+  const nearest = () => guards().sort((a, b) => a.pos.distanceToSquared(zayd.pos) - b.pos.distanceToSquared(zayd.pos))[0];
+  // Up to the planters, as Tavi shouts, until the nearest guard is a pistol shot away.
+  const first = nearest();
+  if (first) {
+    stage.runToward(zayd, first.pos);
+    await stage.play(1.4);
+    await stage.playUntil(() => zayd.pos.distanceTo(first.pos) < 13, 3);
+  }
+  const target = nearest();
   if (target) {
     const yaw = Math.atan2(target.pos.x - zayd.pos.x, target.pos.z - zayd.pos.z);
     game.cameraRig.holdView(yaw, 0.05);
@@ -181,6 +190,22 @@ function createStage(game) {
           if (!marker) return;
           const goal = game.markers.positionOf(marker);
           game.vehicles.autopilot.driveToward(car, goal.x, goal.z, speed, { holdPace: true, allowReverse: false });
+        },
+      };
+    },
+    /** Have a person run toward a point (a live position works: they follow it) from now on. */
+    runToward(person, point) {
+      game.staging = {
+        update() {
+          const dx = point.x - person.pos.x;
+          const dz = point.z - person.pos.z;
+          const distance = Math.hypot(dx, dz) || 1;
+          const intent = person.intent;
+          intent.aim = false;
+          intent.fire = false;
+          intent.moveX = dx / distance;
+          intent.moveZ = dz / distance;
+          intent.pace = 'run';
         },
       };
     },

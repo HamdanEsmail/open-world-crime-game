@@ -40,6 +40,10 @@ export function createFollowCamera(game) {
     snap() {
       snapNext = true;
     },
+    /** Choose one of the distances the camera key cycles through: 0 standard, 1 far, 2 close. */
+    setDistance(index) {
+      distanceIndex = clamp(Math.round(index), 0, CAMERA_DISTANCES.length - 1);
+    },
     /** Point the camera along a heading at once. */
     setYaw(yaw) {
       rig.yaw = yaw;
