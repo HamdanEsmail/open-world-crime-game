@@ -254,7 +254,7 @@ async function arrestTavi(act) {
 async function viewOnThePlaza(act) {
   const { m, spire, crew } = act;
   await m.fadeOut(1);
-  act.clock.set(19.6);
+  act.clock.set(18.9);
   m.setWeather(0.3, 3);
   const door = spire.door;
   m.teleportPlayer(door.x + 5, door.z + 13, Math.PI);
@@ -281,7 +281,7 @@ async function viewOnThePlaza(act) {
   strollTo(m, vane, walkTarget.x, walkTarget.z, 'walk');
   escorts.forEach((officer, index) => officer && strollTo(m, officer, walkTarget.x + (index ? 1.1 : -1.1), walkTarget.z - 0.4, 'walk'));
   await m.cutscene([
-    { position: { x: door.x - 22, y: 6, z: door.z + 34 }, lookAt: vane, moveTo: { x: door.x - 16, y: 5, z: door.z + 28 }, seconds: 5, speaker: 'vane', text: 'Port Sarab was a mirage before me. It will be one after.' },
+    { position: { x: door.x - 11, y: 3.2, z: door.z + 15 }, lookAt: vane, moveTo: { x: door.x - 7.5, y: 2.6, z: door.z + 11 }, seconds: 5, fov: 46, speaker: 'vane', text: 'Port Sarab was a mirage before me. It will be one after.' },
     overShoulder(m, vane, zayd, { seconds: 4, back: 1.6, speaker: 'vane', text: 'Mr Karam. The Vane Spire thanks you for your visit.' }),
     twoShot(m, dahan, zayd, { seconds: 3, speaker: 'dahan', text: 'Karam.' }),
     twoShot(m, zayd, dahan, { seconds: 2.5, side: -1, speaker: 'zayd', text: 'Captain.' }),

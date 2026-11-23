@@ -225,7 +225,7 @@ export function createActivities(game) {
   // Story jobs come first; being knocked out or arrested ends any side job.
   game.events.on('mission:started', () => cancel('A job came up: side job dropped'));
   game.events.on('player:died', () => cancel('You were knocked out'));
-  game.events.on('player:arrested', () => cancel('Busted by the PSPD'));
+  game.events.on('player:arrested', () => cancel('Arrested by the PSPD'));
   game.events.on('save:loading', () => cancel(null));
   return activities;
 }

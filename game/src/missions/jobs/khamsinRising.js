@@ -312,26 +312,24 @@ async function stageAtTheSpire(ctx) {
   await driveLeg(ctx, { x: kerb.x, z: kerb.z }, 'Stage the van at the Vane Spire', 'Vane Spire');
   await voice.quiet();
 
-  // The crew steps out onto the pavement on the van's kerb side (its right, parked as it is).
+  // Everyone steps out onto the pavement in a line between the van and the plaza.
   const van = ctx.van;
-  const side = (along, across) => ({
-    x: van.pos.x + Math.sin(van.heading) * along - Math.cos(van.heading) * across,
-    z: van.pos.z + Math.cos(van.heading) * along + Math.sin(van.heading) * across,
-  });
-  const a = side(-1, 2.7);
-  const b = side(-3.4, 2.9);
-  const c = side(1.6, 3.1);
-  placePerson(m, ctx.mina, a.x, a.z, Math.PI);
-  const faris = m.spawnCast('faris', b.x, b.z, Math.PI);
-  const tavi = m.spawnCast('tavi', c.x, c.z, Math.PI);
+  const walk = (spire.plaza.z1 + spire.curb.z) / 2 - 1.2;
+  m.teleportPlayer(van.pos.x - 0.6, walk + 1.6, Math.PI);
+  const zayd = m.game.player.character;
+  placePerson(m, ctx.mina, van.pos.x - 2.4, walk - 0.6, 0);
+  const faris = m.spawnCast('faris', van.pos.x + 1.4, walk - 0.9, 0);
+  placePerson(m, faris, van.pos.x + 1.4, walk - 0.9, 0);
+  const tavi = m.spawnCast('tavi', van.pos.x + 4.4, walk - 0.2, -Math.PI / 2);
+  placePerson(m, tavi, van.pos.x + 4.4, walk - 0.2, -Math.PI / 2);
   ctx.clock.set(17.9);
   m.setWeather(0.66, 6);
   leaveWeatherAfterJob(m, 0.62, 2);
   await m.cutscene([
     { position: { x: spire.curb.x + 34, y: 2, z: spire.curb.z + 26 }, lookAt: { x: spire.x, y: 210, z: spire.z }, moveTo: { x: spire.curb.x + 28, y: 3, z: spire.curb.z + 20 }, seconds: 5, speaker: 'mina', text: 'Three hundred metres of glass, and nobody can see it.' },
-    twoShot(m, ctx.mina, faris, { seconds: 3.5, speaker: 'faris', text: 'Like a mirage. Sarab.' }),
-    shotOf(m, tavi, { bearing: 2.6, distance: 4, height: 1.7, look: 1.55, seconds: 3, speaker: 'tavi', text: "Mirages don't have guards." }),
-    overShoulder(m, ctx.mina, m.game.player.character, { seconds: 4, speaker: 'mina', text: 'Tonight they do. Ten minutes. Breathe. Then we go in.' }),
+    twoShot(m, ctx.mina, faris, { seconds: 3.5, side: -1, speaker: 'faris', text: 'Like a mirage. Sarab.' }),
+    shotOf(m, tavi, { bearing: Math.PI + 0.5, distance: 4, height: 1.7, look: 1.55, seconds: 3, speaker: 'tavi', text: "Mirages don't have guards." }),
+    overShoulder(m, ctx.mina, zayd, { seconds: 4, speaker: 'mina', text: 'Tonight they do. Ten minutes. Breathe. Then we go in.' }),
   ]);
   m.objective('Answer the phone');
   await m.phone('dahan', [

@@ -95,7 +95,8 @@ async function startNewGame(game, openWorld) {
   game.safehouses.reset?.();
   game.wanted.clear();
   game.weather.set(0);
-  game.time.hour = game.config.startHour;
+  game.time.hour = game.config.newGameHour;
+  game.time.clockRate = 1;
   const character = game.player.character;
   character.weapons.length = 0;
   character.weaponIndex = -1;

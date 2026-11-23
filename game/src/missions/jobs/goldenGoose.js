@@ -170,6 +170,9 @@ async function waitForTheConvoy(ctx) {
   await m.seconds(2.5);
   const heading = Math.atan2(-120, -230);
   const at = (ahead) => lanePoint(m, 806, 1592, heading, { ahead, maxDistance: 40 });
+  // The Airfield Road is closed for the bullion run: nothing else on it but the convoy.
+  m.setTraffic(0.3);
+  m.clearArea(780, 1540, 130);
   const lead = at(24);
   const middle = at(0);
   const rear = at(-22);

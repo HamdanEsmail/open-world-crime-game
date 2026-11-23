@@ -57,9 +57,7 @@ export function createCrewVoice(m) {
     talk(lines) {
       if (!lines || lines.length === 0) return;
       speaking += 1;
-      const done = () => {
-        speaking = Math.max(0, speaking - 1);
-      };
+      const done = () => { speaking = Math.max(0, speaking - 1); };
       Promise.resolve(m.say(lines)).then(done, done);
     },
     /** One quip from `pool`, never the same twice until the pool is spent; false when it kept quiet. */
@@ -79,9 +77,10 @@ export function createCrewVoice(m) {
     get busy() {
       return speaking > 0;
     },
-    /** A wait that resolves once everything said through this voice has been heard (or `most` seconds pass). */
-    quiet(most = 8) {
-      return m.any([m.until(() => speaking === 0), m.seconds(most)]);
+    /** Wait until everything said here has been heard; after `most` seconds the unsaid rest is dropped. */
+    async quiet(most = 8) {
+      await m.any([m.until(() => speaking === 0), m.seconds(most)]);
+      if (speaking > 0) m.game.story?.dialogue?.clear?.();
     },
   };
   return voice;

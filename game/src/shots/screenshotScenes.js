@@ -11,6 +11,7 @@ export async function stageScreenshot(game, name) {
   game.cameraRig.setCinematic(null);
   game.mode = 'playing';
   game.input.enabled = false;
+  game.time.paused = true; // the scene steps the game itself, so every take plays out the same
   game.time.clockRate = 0;
   game.settings.quality = 'high'; // a still frame can afford the full shadow map
   game.events.emit('settings:changed', { settings: game.settings, key: 'quality' });
@@ -74,13 +75,26 @@ async function vaneJobGunfightInTheKhamsin(game, stage) {
     game.cameraRig.holdView(yaw, 0.05);
     stage.aimAndFire(zayd, yaw, 0.02);
     await stage.play(1.1);
+    // Stop on the frame a round leaves the rifle, with its flash and tracer in the air.
+    const rounds = () => {
+      const held = zayd.weapons[zayd.weaponIndex];
+      return held ? (held.clip || 0) + (held.ammo || 0) : 0;
+    };
+    let before = rounds();
+    await stage.playUntil(() => {
+      const now = rounds();
+      const fired = now < before;
+      before = now;
+      return fired;
+    }, 1.5);
   }
   zayd.tags.invulnerable = false;
 }
 
 /**
- * The cover: job seven, "Dress Rehearsal", as it is played. Three stars locked on, the clock running
- * to the Gate, PSPD alongside, a roadblock across Vane Boulevard ahead and Shaheen-1 overhead.
+ * The cover: job seven, "Dress Rehearsal", as it is played, seen over the bonnet with the camera
+ * swung round to look back up Vane Boulevard. Three stars locked on, the clock running to the Gate,
+ * PSPD strung out behind the getaway car, Shaheen-1 low over them and The Spires filling the sky.
  */
 async function getawayRehearsalUnderPursuit(game, stage) {
   game.missions.start('dress_rehearsal', { resumeFrom: 'door' });
@@ -98,21 +112,26 @@ async function getawayRehearsalUnderPursuit(game, stage) {
   game.traffic.populateNow();
   await stage.play(0.1);
   // Keep the two southbound lanes ahead clear for the run; the northbound side keeps its traffic.
-  for (let z = -285; z <= -130; z += 16) game.traffic.clearArea(lane - 2.6, z, 8.5, 20);
-  stage.driveAlong(car, [{ x: lane, z: -230 }, { x: lane, z: -170 }, { x: lane, z: -100 }], 19);
-  await stage.play(5.2);
-  stage.gatherPursuit(car, [[-3.7, 3.6, -0.04], [-3.5, 19, 0.05], [0.3, -22, 0]]);
+  for (let z = -285; z <= -100; z += 16) game.traffic.clearArea(lane - 2.6, z, 8.5, 20);
+  stage.driveAlong(car, [{ x: lane, z: -230 }, { x: lane, z: -170 }, { x: lane, z: -90 }, { x: lane, z: 20 }], 22);
+  await stage.play(5.5);
+  // Hold the take until northbound traffic is passing on the far side of the median.
+  const passing = () => game.vehicles.list.some((other) => other.tags.traffic && other.driver
+    && other.pos.x > 42 && other.pos.x < 50 && other.pos.z < car.pos.z - 6 && other.pos.z > car.pos.z - 30);
+  await stage.playUntil(passing, 5);
+  // Slots are [metres to the car's left, metres ahead (negative is behind), heading offset].
+  stage.gatherPursuit(car, [[-3.7, -8.5, 0.03], [0.3, -20, -0.02], [-3.5, -32, 0.02], [0.2, -47, 0]]);
   await stage.play(0.4);
   game.effects.clear(); // the dust of setting the stage, not of the chase
   game.pedestrians.refill();
   await stage.play(0.1);
-  game.roadblocks.placeAt(lane - 1.5, car.pos.z + 44, 0, { spikes: false, gapSide: 'left', stars: 3 });
   game.policeHelicopter.stageAt({
-    x: car.pos.x + 1.5, y: 15.5, z: car.pos.z + 36, heading: Math.PI - 0.35, pitch: 0.16, roll: 0.06,
-    aimX: car.pos.x, aimZ: car.pos.z + 3, light: true,
+    x: car.pos.x + 4, y: 12, z: car.pos.z - 25, heading: 0.9, pitch: 0.12, roll: 0.12,
+    aimX: car.pos.x, aimZ: car.pos.z - 2, light: true,
   });
-  game.cameraRig.holdView(0.04, 0.15);
-  await stage.play(0.25);
+  game.cameraRig.holdView(Math.PI - 0.45, 0.08);
+  game.cameraRig.snap();
+  await stage.play(0.3);
 }
 
 /** The start screen: the main menu over The Spires as the windows light up at dusk. */

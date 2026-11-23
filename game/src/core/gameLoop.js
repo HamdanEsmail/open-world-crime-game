@@ -16,7 +16,8 @@ export function startGameLoop(game, update, render) {
     time.dt = dt;
     time.elapsed += dt;
     time.frame += 1;
-    time.hour = (time.hour + (dt * 24) / game.config.dayLengthSeconds * time.clockRate) % 24;
+    const dark = time.hour >= 20.5 || time.hour < 5.5;
+    time.hour = (time.hour + ((dt * 24) / game.config.dayLengthSeconds) * time.clockRate * (dark ? game.config.nightClockRate : 1)) % 24;
     update(dt);
   }
 

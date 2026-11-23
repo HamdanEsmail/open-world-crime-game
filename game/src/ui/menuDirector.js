@@ -40,7 +40,7 @@ export function createMenus(game) {
   for (const screen of Object.values(screens)) part(screenElementId(screen.name)).hidden = true;
   const wheel = createWeaponWheel(game, part('weapon-wheel'));
   const banner = createMissionResultBanner(game, part('mission-result-banner'));
-  const knockout = createArrestedKnockedOutScreen(game, part('busted-wasted-screen'));
+  const knockout = createArrestedKnockedOutScreen(game, part('arrested-knocked-out-screen'));
   const bars = createCutsceneLetterbox(game, part('cutscene-letterbox'));
   const phone = createPhoneCallScreen(game, part('phone-handler-calls'));
 

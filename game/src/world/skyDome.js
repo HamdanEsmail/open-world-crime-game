@@ -187,6 +187,16 @@ varying vec3 vDir;
 
 ${SKY_COLOR_GLSL}
 
+// The noise texture read with a smooth curve between its texels instead of straight lines, so cloud
+// edges stay soft where the sky overhead stretches a few texels across the whole screen.
+vec4 softNoise(vec2 uv) {
+  vec2 texel = uv * 256.0 + 0.5;
+  vec2 whole = floor(texel);
+  vec2 part = texel - whole;
+  part = part * part * part * (part * (part * 6.0 - 15.0) + 10.0);
+  return texture2D(uNoiseMap, (whole + part - 0.5) / 256.0);
+}
+
 // Long thin streaks of high cloud, drifting slowly across a flattened sky plane.
 float highCloudStreaks(vec3 dir) {
   if (dir.y < 0.012 || uCloudOpacity < 0.001) return 0.0;
@@ -194,8 +204,8 @@ float highCloudStreaks(vec3 dir) {
   p = vec2(p.x * 0.80 - p.y * 0.60, p.x * 0.60 + p.y * 0.80);
   p += vec2(uTime * 0.0030, uTime * 0.0009);
   // Bend the streaks with a slow warp so they sweep and curl instead of running ruler-straight.
-  p += texture2D(uNoiseMap, p * 0.0875 + 0.31).gb * 1.4 - 0.7;
-  float shape = texture2D(uNoiseMap, vec2(p.x * 0.42, p.y * 2.3) * 0.125).r;
+  p += softNoise(p * 0.0875 + 0.31).gb * 1.4 - 0.7;
+  float shape = softNoise(vec2(p.x * 0.42, p.y * 2.3) * 0.125).r;
   float wisps = texture2D(uNoiseMap, vec2(p.x * 2.2, p.y * 13.0) * 0.03125).a;
   float n = shape * 0.84 + wisps * 0.16;
   float cover = smoothstep(uCloudCover, uCloudCover + 0.22, n);

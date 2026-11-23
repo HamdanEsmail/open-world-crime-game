@@ -358,7 +358,7 @@ export function createStreetRaces(game, activities) {
     showStartMarkers(true);
   }
 
-  /** Stopped from outside (a story job, knocked out, busted): clear everything at once. */
+  /** Stopped from outside (a story job, knocked out, arrested): clear everything at once. */
   function stop() {
     if (!race) return;
     if (race.state !== 'over') endRace();

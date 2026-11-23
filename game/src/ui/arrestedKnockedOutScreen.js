@@ -4,7 +4,7 @@
 import { createElement, setText } from './uiElements.js';
 
 /**
- * Build the screen in `root` (#busted-wasted-screen) and listen for arrests, knock-outs and respawns.
+ * Build the screen in `root` (#arrested-knocked-out-screen) and listen for arrests, knock-outs and respawns.
  * @returns {{show(kind:'cuffs'|'lightsOut', line?:string):void, clear():void, isShowing:boolean}}
  */
 export function createArrestedKnockedOutScreen(game, root) {

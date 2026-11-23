@@ -4,7 +4,7 @@
 // first lead: Uncle Faris has work, and the GPS points the way to the F on the map.
 
 /** The hour the story opens at: the sun low and gold over the gulf. */
-const OPENING_HOUR = 17.4;
+const OPENING_HOUR = 16.7;
 
 /**
  * Play the opening and leave the player at the flat with the first hint.

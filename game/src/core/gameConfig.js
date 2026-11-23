@@ -17,9 +17,15 @@ export const gameConfig = {
     gravity: 9.81,
   },
 
-  /** In-game clock: one full day lasts this many real seconds; a new game starts at golden hour. */
-  dayLengthSeconds: 1440,
+  /**
+   * In-game clock: a day at daytime pace would last this many real seconds (two minutes an hour); the
+   * hours of darkness pass three times faster. The title screen sits at golden hour and a new game
+   * starts a little before it, so the first minutes of play are the city at its best.
+   */
+  dayLengthSeconds: 2880,
+  nightClockRate: 3,
   startHour: 17.2,
+  newGameHour: 16.5,
 
   /** How many simulated things may be alive around the player (kept low for integrated graphics). */
   population: {
