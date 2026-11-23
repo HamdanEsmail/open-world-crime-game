@@ -3,17 +3,46 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
-<style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-</style>
+<title>KHAMSIN: Port Sarab — an original open-world crime game</title>
+<link rel="stylesheet" href="./css/hud.css">
+<link rel="stylesheet" href="./css/menus.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
+<!-- KHAMSIN: Port Sarab. A sun-soaked desert-coast city of its own: drive it, walk it, rob it, and
+     decide whose side the undercover wheelman is really on. Everything here is original. -->
+<canvas id="port-sarab-open-world" aria-label="KHAMSIN: Port Sarab, the 3D open world"></canvas>
+
+<div id="hud" hidden>
+  <div id="hud-minimap" title="Rotating minimap with GPS route, police and mission blips"></div>
+  <div id="hud-health-armor"></div>
+  <div id="hud-wanted-stars" title="Wanted level, one to five stars"></div>
+  <div id="hud-money-and-rank"></div>
+  <div id="hud-clock-weather"></div>
+  <div id="hud-mission-objective"></div>
+  <div id="hud-cover-meter" title="Crew trust against the badge: the undercover balance"></div>
+  <div id="hud-weapon-ammo"></div>
+  <div id="hud-speedometer"></div>
+  <div id="hud-radio-station"></div>
+  <div id="hud-district-street-name"></div>
+  <div id="hud-interact-prompt"></div>
+  <div id="hud-subtitles"></div>
+  <div id="hud-notifications"></div>
+  <div id="hud-crosshair"></div>
+  <div id="hud-damage-vignette"></div>
+</div>
+
+<div id="weapon-wheel" hidden></div>
+<div id="phone-handler-calls" hidden></div>
+<div id="mission-result-banner" hidden></div>
+<div id="busted-wasted-screen" hidden></div>
+<div id="cutscene-letterbox" hidden></div>
+<div id="city-map-screen" hidden></div>
+<div id="shop-menu" hidden></div>
+<div id="pause-menu" hidden></div>
+<div id="main-menu" hidden></div>
+<div id="loading-screen"><div id="loading-title">KHAMSIN</div><div id="loading-subtitle">PORT SARAB</div><div id="loading-bar"><i></i></div><div id="loading-step">Raising the city from the sand…</div></div>
+
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

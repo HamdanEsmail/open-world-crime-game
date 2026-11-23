@@ -1,0 +1,47 @@
+/* KHAMSIN: Port Sarab. Page shell and the loading screen; the HUD's own rules follow below. */
+:root {
+  --sand: #e9b44c;
+  --sand-deep: #b9822a;
+  --teal: #1ba39c;
+  --coral: #e4572e;
+  --night: #0e1b2a;
+  --cream: #fff4d6;
+  --hud-font: "Bahnschrift", "DIN Alternate", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--night);
+  color: var(--cream);
+  font-family: var(--hud-font);
+  user-select: none;
+}
+
+#port-sarab-open-world {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+[hidden] { display: none !important; }
+
+#loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: radial-gradient(ellipse at 50% 120%, #f0a23c 0%, #b3541e 30%, #3a1c2c 62%, #0e1b2a 100%);
+}
+#loading-title { font-size: 92px; font-weight: 700; letter-spacing: 0.24em; margin-right: -0.24em; color: var(--cream); text-shadow: 0 4px 0 rgba(0, 0, 0, 0.25); }
+#loading-subtitle { font-size: 22px; letter-spacing: 0.7em; margin-right: -0.7em; color: var(--sand); }
+#loading-bar { width: 320px; height: 4px; margin-top: 26px; background: rgba(255, 244, 214, 0.18); }
+#loading-bar i { display: block; height: 100%; width: 8%; background: var(--sand); transition: width 0.25s ease; }
+#loading-step { font-size: 14px; letter-spacing: 0.08em; opacity: 0.8; }
