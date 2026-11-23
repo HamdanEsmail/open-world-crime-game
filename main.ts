@@ -10,7 +10,7 @@
 //   MAKEFUN_OUTPUT_DIR=out node main.ts
 
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join, sep } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
@@ -19,14 +19,10 @@ const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 const gameSource = join(here, 'game');
 const screenshotSource = join(here, 'screenshots');
 
-/** Development pages live in game/dev while the game is being built; they are never part of the entry. */
-const developmentFolder = join(gameSource, 'dev');
-function isShippedGameFile(source: string): boolean {
-  return source !== developmentFolder && !source.startsWith(developmentFolder + sep);
-}
-
+// The whole game (the page, its source, the stylesheets, the vendored library), then its four
+// screenshots: the cover first by name, staged from the game's own ?shot=<name> scenes.
 mkdirSync(out, { recursive: true });
-cpSync(gameSource, join(out, 'game'), { recursive: true, filter: isShippedGameFile });
+cpSync(gameSource, join(out, 'game'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
 if (existsSync(screenshotSource)) cpSync(screenshotSource, join(out, 'screenshots'), { recursive: true });
 

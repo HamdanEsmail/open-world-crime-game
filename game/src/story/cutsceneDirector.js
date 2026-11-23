@@ -212,7 +212,9 @@ export function createCutsceneDirector(game) {
     let pressed = false;
     for (const code of SKIP_KEYS) {
       const down = keyDown(code);
-      if (down && !current.held[code]) pressed = true;
+      // A tap shorter than a frame still counts: the input remembers keys that went down since the last frame.
+      const tapped = Boolean(game.input && game.input.keyPressed && game.input.keyPressed(code));
+      if ((down && !current.held[code]) || tapped) pressed = true;
       current.held[code] = down;
     }
     return pressed;

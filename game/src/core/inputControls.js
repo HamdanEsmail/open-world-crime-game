@@ -67,6 +67,8 @@ export function createInputControls(canvas, target = window) {
   const down = new Set();
   const pressedThisFrame = new Set();
   const releasedThisFrame = new Set();
+  /** Key codes that went down since the last frame, however briefly they were held. */
+  const codesPressedThisFrame = new Set();
   const codeToActions = new Map();
   for (const action of Object.keys(KEY_BINDINGS)) {
     for (const code of KEY_BINDINGS[action]) {
@@ -107,6 +109,8 @@ export function createInputControls(canvas, target = window) {
     },
     /** Raw key state by KeyboardEvent.code, for menus (works while `enabled` is false). */
     keyDown: (code) => down.has(code),
+    /** True on the frame after a key went down, even if it was tapped and let go between two frames. */
+    keyPressed: (code) => codesPressedThisFrame.has(code),
     rawPressed: (action) => pressedThisFrame.has(action),
     /** Ask the browser to capture the mouse for camera look; safe to call from a click. */
     lockPointer() {
@@ -132,6 +136,7 @@ export function createInputControls(canvas, target = window) {
     endFrame() {
       pressedThisFrame.clear();
       releasedThisFrame.clear();
+      codesPressedThisFrame.clear();
       input.lookX = 0;
       input.lookY = 0;
       input.wheel = 0;
@@ -150,6 +155,7 @@ export function createInputControls(canvas, target = window) {
   function press(code) {
     if (down.has(code)) return;
     down.add(code);
+    codesPressedThisFrame.add(code);
     const actions = codeToActions.get(code);
     if (actions) for (let i = 0; i < actions.length; i += 1) pressedThisFrame.add(actions[i]);
     refreshAxes();
