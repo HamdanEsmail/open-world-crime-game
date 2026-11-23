@@ -130,7 +130,7 @@ async function runTaviDown(act) {
   shieldCast(scope, tavi, false);
   const resumed = m.resumeFrom === 'badge_chase';
   if (resumed) {
-    const ahead = lanePoint(m, gate.laneX, spire.curb.z + 160, 0);
+    const ahead = lanePoint(m, gate.laneX, spire.curb.z + 90, 0);
     m.game.vehicles?.place?.(summit, ahead.x, ahead.z, ahead.heading);
   }
   if (tavi && tavi.alive !== false) m.seat(summit, tavi, 0);

@@ -61,6 +61,7 @@ async function bootPortSarab() {
   );
 
   if (query.has('shot')) {
+    hideLoadingScreen(game);
     const shots = await import('./shots/screenshotScenes.js');
     await shots.stageScreenshot(game, query.get('shot'));
   } else if (query.has('play')) {

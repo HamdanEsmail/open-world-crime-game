@@ -48,10 +48,10 @@ async function buggyEscapeOverTheDunes(game, stage) {
   const chasers = game.vehicles.list
     .filter((vehicle) => vehicle !== buggy && vehicle.tags.mission && vehicle.driver && !vehicle.wrecked)
     .sort((a, b) => a.pos.distanceToSquared(buggy.pos) - b.pos.distanceToSquared(buggy.pos));
-  stage.formUp(buggy, chasers, [[5.2, -9, 0.06], [-6.5, -19, -0.05]]);
-  game.cameraRig.holdView(buggy.heading + 0.42, 0.1);
+  stage.formUp(buggy, chasers, [[8.5, 9, -0.07], [-6, 11, 0.06]]);
+  game.cameraRig.holdView(buggy.heading + 0.3, 0.1);
   game.cameraRig.snap();
-  await stage.play(0.12);
+  await stage.play(0.35);
 }
 
 /**
@@ -94,17 +94,19 @@ async function getawayRehearsalUnderPursuit(game, stage) {
   game.vehicles.place(car, lane, -292, 0);
   game.cameraRig.setYaw(0);
   game.cameraRig.snap();
+  game.traffic.density = 2; // rush hour on the boulevard
   game.traffic.populateNow();
   await stage.play(0.1);
   // Keep the two southbound lanes ahead clear for the run; the northbound side keeps its traffic.
   for (let z = -285; z <= -130; z += 16) game.traffic.clearArea(lane - 2.6, z, 8.5, 20);
   stage.driveAlong(car, [{ x: lane, z: -230 }, { x: lane, z: -170 }, { x: lane, z: -100 }], 19);
   await stage.play(5.2);
-  game.roadblocks.placeAt(lane - 1.5, car.pos.z + 46, 0, { spikes: false, gapSide: 'left', stars: 3 });
   stage.gatherPursuit(car, [[-3.7, 3.6, -0.04], [-3.5, 19, 0.05], [0.3, -22, 0]]);
-  await stage.play(0.5);
+  await stage.play(0.4);
   game.effects.clear(); // the dust of setting the stage, not of the chase
   game.pedestrians.refill();
+  await stage.play(0.1);
+  game.roadblocks.placeAt(lane - 1.5, car.pos.z + 44, 0, { spikes: false, gapSide: 'left', stars: 3 });
   game.policeHelicopter.stageAt({
     x: car.pos.x + 1.5, y: 15.5, z: car.pos.z + 36, heading: Math.PI - 0.35, pitch: 0.16, roll: 0.06,
     aimX: car.pos.x, aimZ: car.pos.z + 3, light: true,
