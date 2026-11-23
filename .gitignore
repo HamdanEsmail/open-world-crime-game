@@ -1,0 +1,4 @@
+# Development pages used while building; never part of the entry.
+game/dev/
+# Local hand-in dry runs.
+out/

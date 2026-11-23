@@ -11,8 +11,9 @@
 import * as THREE from 'three';
 import { gameConfig } from './gameConfig.js';
 import { createEventBus } from './eventBus.js';
-import { createInputControls } from './inputControls.js';
+import { createInputControls, KEY_BINDINGS, ACTION_LABELS } from './inputControls.js';
 import { createMarkerRegistry } from './markerRegistry.js';
+import { createInteractPrompts } from './interactPrompts.js';
 import { createSeededRandom } from './seededRandom.js';
 import { mathUtils } from './mathUtils.js';
 
@@ -171,6 +172,27 @@ import { mathUtils } from './mathUtils.js';
  *   raycast(origin, direction, maxDistance) -> {distance, point, normal, collider}|null   static world and ground
  *   lineOfSight(a, b) -> boolean                        nothing static blocks the segment a-b
  *
+ * game.city       (world/portSarabCityPlan.js)   the plan, pure data; read that file's header and functions:
+ *   avenues, streets, roadKinds, desertRoads, districts, districtById, urban {minX, maxX, minZ, maxZ}, coast,
+ *   blocks [{id, col, row, district, lot {x0, z0, x1, z1}, centerX, centerZ, special, buildings}],
+ *   buildings [{id, x, z, w, d, h, style, district, block, front 'n'|'s'|'e'|'w', variant 0..7, tint 0..1, windTower, name, landmark}],
+ *   walls, containers [{x, z, w, d, h, stack, colorIndex}], openLots [{x0, z0, x1, z1, use, district, front}],
+ *   landmarks [{id, name, kind, x, z, h, radius? | w?, d?}], stuntRamps, flatZones, parkingSpots [{x, z, heading, district}],
+ *   places [{id, kind, name, x, z, heading, curbX, curbZ, district, letter?, person?, drive?, price?, owned?, race?}]
+ *     kinds: 'safehouse'|'contact'|'policeStation'|'hospital'|'gunShop'|'garage'|'food'|'taxiDepot'|'courierDepot'|
+ *            'exportDock'|'raceStart'|'collectible'|'landmarkDoor'
+ *   districtAt(x, z) -> district {id, name, kind, traffic, density, wealth, people}    blockAt(x, z)    streetNameAt(x, z)
+ *   coastZ(x)    place(id)    placesOfKind(kind)
+ *
+ * game.roads      (world/roadNetwork.js)   right-hand traffic
+ *   nodes [{id, x, z, edges, signal, trim}]    edges [{id, a, b, kind, name, width, half, lanesEachWay, median, speed, length, dirX, dirZ, lanes}]
+ *   lanes [{id, edge, from, to, index, x0, z0, x1, z1, dirX, dirZ, heading, length, speed, kind, next: lane[], turns: ('straight'|'left'|'right')[]}]
+ *   walkways [{id, x0, z0, x1, z1, length, dirX, dirZ, links: [fromStart[], fromEnd[]] of {walkway, end, crossing}}]
+ *   nearestLane(x, z, maxDistance?, filter?) -> {lane, t, distance, x, z}|null (reused object)    nearestWalkway(x, z, maxDistance?)
+ *   randomLaneNear(x, z, minDistance, maxDistance, rng, filter?)    randomWalkwayNear(x, z, minDistance, maxDistance, rng)
+ *   signalFor(lane) -> 'green'|'yellow'|'red'    signalPhase(node) -> {ns, ew}
+ *   findRoute(fromX, fromZ, toX, toZ) -> [{x, z}]    routeLength(route)    pointOnLane(lane, t, out)
+ *
  * game.vehicles   (vehicles/vehicleManager.js)
  *   list: Vehicle[]
  *   spawn(specId, {x, z, heading, color?, faction?, parked?, locked?}) -> Vehicle       despawn(vehicle)
@@ -207,12 +229,46 @@ import { mathUtils } from './mathUtils.js';
  *   unlock()   start audio after the first click or key        play(soundId, {x?, y?, z?, volume?, pitch?})
  *   radio: { stations, index, next(), off() }                  setVolumes({master?, music?, effects?})
  *
- * game.cameraRig  (camera/followCamera.js)   yaw (the heading the camera looks along), pitch, shake(strength), focus: Vector3
- * game.player     (player/playerController.js)   character: Character, vehicle: Vehicle|null, pos (the one that counts)
- * game.wanted     (police/wantedLevel.js)   level 0..5, state 'clear'|'pursuit'|'search', report(crime, x, z, options?), set(level), clear()
- * game.economy    (economy/walletAndRank.js) money, addMoney(amount, reason), spend(amount, reason) -> boolean, rank, addRespect(points)
- * game.missions   (missions/missionRunner.js) active, start(id), abort(), isCompleted(id)
- * game.story      (story/coverMeter.js)     crewTrust 0..100, badge 0..100, addTrust(n, why), addBadge(n, why), flags
+ * game.cameraRig  (camera/followCamera.js)   yaw (the heading the camera looks along), pitch, focus: Vector3, shake(strength 0..1),
+ *   snap(), setYaw(yaw), lookBehind, setCinematic({position, lookAt, fov} | {orbit: {x, y, z}, radius, height, speed, fov} | null)
+ * game.player     (player/playerController.js)
+ *   character: Character, vehicle: Vehicle|null, state 'onFoot'|'driving'|'down', pos, heading, speed (m/s), isDriving
+ *   spawn(x, z, heading), teleport(x, z, heading), putInVehicle(vehicle), knockOut(), arrest()
+ *   emits 'player:enteredVehicle' {vehicle}, 'player:exitedVehicle' {vehicle}, 'vehicle:carjacked' {vehicle, victim, by},
+ *         'player:weaponChanged', 'player:died' {}, 'player:arrested' {}, 'player:respawned' {cause: 'died'|'arrested', place}
+ * game.prompts    (core/interactPrompts.js)  offer(priority, keyLabel, text) every frame a prompt is wanted, e.g.
+ *   game.prompts.offer(20, 'E', 'Buy a weapon'); then read game.input.pressed('interact'). Vehicles use priority 10 and key F.
+ * game.settings   { mouseSensitivity, invertY, quality: 'low'|'medium'|'high', master, music, effects }
+ *
+ * game.wanted     (police/wantedLevel.js)
+ *   level 0..5, stars (same), heat 0..1 toward the next star, state 'clear'|'pursuit'|'search', searchProgress 0..1,
+ *   seen (police can see the player now), lastKnown {x, z}, report(crimeType, x, z, {victim?, witnessed?}), add(stars), set(level), clear()
+ *   crime types: 'carTheft' 'carjacking' 'policeCarTheft' 'hitAndRun' 'vehicleRamming' 'assault' 'gunfire' 'murder'
+ *                'officerAssault' 'officerKilled' 'propertyDamage' 'explosion' 'robbery' 'trespass'
+ *   emits 'wanted:changed' {level, previous}, 'wanted:search' {}, 'wanted:escaped' {}
+ * game.police     (police/policeDispatch.js)   units [{vehicle, officers: Character[], role, state}], helicopter, suspend(seconds)
+ *
+ * game.weapons    (combat/weaponSystem.js)
+ *   give(character, weaponId, ammo), take(character, weaponId), current(character) -> weapon spec | null (fists)
+ *   aiAttack(character, target, dt, {accuracy 0..1}) sets the character's intent to aim and shoot at a target (police, gangs, guards)
+ *   explode(x, y, z, radius, damage, source)        dropPickup(kind, x, z, {weaponId?, amount?})
+ *   catalog in game.catalog.weapons / game.catalog.weaponById(id): {id, name, model: 'pistol'|'smg'|'shotgun'|'rifle'|'bat', damage,
+ *   fireRate, clipSize, range, spread, price, automatic}
+ *
+ * game.economy    (economy/walletAndRank.js)
+ *   money, addMoney(amount, reason), spend(amount, reason, force?) -> boolean, rep (points), rank (1..), rankName, addRep(points, reason),
+ *   stats {add(name, n), get(name), all()}    emits 'money:changed' {money, delta, reason}, 'rank:changed' {rank, rankName}
+ * game.missions   (missions/missionRunner.js)
+ *   active: null | {id, title, giver, objectives: [{text, done, optional}], timer?: {label, seconds}, counter?: {label, value, of}}
+ *   start(id), abort(reason), fail(reason), isCompleted(id), completedCount, total, log() -> [{id, title, done, briefing}]
+ * game.story      (story/coverMeter.js)     crewTrust 0..100, badge 0..100, addTrust(n, why), addBadge(n, why), flags {}
+ * game.cutscenes  (story/cutsceneDirector.js) play(shots) -> Promise; playing
+ * game.hud        (ui/hudDirector.js)        show(), hide(), setPrompt(keyLabel, text), clearPrompt(), route, routeDistance
+ * game.menus      (ui/menuDirector.js)       isOpen, showMainMenu(), openPause(), openMap(), closeAll(), letterbox(on),
+ *   openShop({title, subtitle, items: [{id, name, price, description, owned, disabled}], onBuy(item), onClose}), closeShop(),
+ *   setLoading(fraction, text), hideLoading()    emits 'menu:newGame', 'menu:continue', 'menu:load' {slot}, 'menu:save' {slot}, 'menu:quit'
+ * game.save       (core/saveGame.js)         save(slot), load(slot) -> boolean, hasAny(), listSlots() -> [{slot, exists, label, detail}]
+ *   Systems that keep progress expose serialize() -> plain object and deserialize(object).
  *
  * EVENTS anyone may emit or hear: 'notify' {text, kind?: 'info'|'good'|'bad'|'cash'|'wanted'}   'subtitle' {speaker, text, seconds?}
  *   'crime' {type, x, z, severity?, victim?}   'shot:fired' {shooter, weaponId, x, y, z, dirX, dirY, dirZ, hitX, hitY, hitZ, hit}
@@ -277,7 +333,12 @@ export function createGameContext(canvas, options = {}) {
     newEntityId,
     createVehicleControls,
     createCharacterIntent,
+    keyBindings: KEY_BINDINGS,
+    actionLabels: ACTION_LABELS,
+    settings: { mouseSensitivity: 1, invertY: false, quality: 'medium', master: 0.8, music: 0.6, effects: 0.9 },
+    prompts: null,
   };
+  game.prompts = createInteractPrompts(game);
 
   function fitToWindow() {
     const width = window.innerWidth;

@@ -1,34 +1,38 @@
-// A working gta6-01 entry (Node 22, standard library only): the game is this directory's
-// game/ folder, plain static files a desktop browser loads offline (game/index.html and its ES
-// modules, no library and no network request), and the program hands it in. It copies game/ and
-// screenshots/ from beside this file to /output and writes /output/dossier.json, the summary the
-// judge reads, with the vendored make.fun library. Only the plumbing, not an open world: Block
-// Dodger, a plain 2D canvas game where a paddle dodges falling blocks and catches coins, with a
-// title screen, score, lives and levels, game over and restart, flat colours and no sound. Build
-// your own open-world crime game in its place (three.js or any library you vendor under game/),
-// put your 3 or 4 PNG or JPEG screenshots in screenshots/ (the first by name is the cover) and run it.
+// KHAMSIN: Port Sarab, handed in (Node 22, standard library only).
 //
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
+// The game is the game/ folder beside this file: plain static files a desktop browser loads offline
+// (game/index.html, its ES modules under game/src/, the stylesheets, and three.js vendored as
+// game/vendor/three.module.min.js). This program copies game/ and screenshots/ to the output
+// directory and writes dossier.json there with make.fun's library, exactly as the kit's starter does.
+//
+// Play it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+//   MAKEFUN_OUTPUT_DIR=out node main.ts
 
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const gameSource = join(here, 'game');
+const screenshotSource = join(here, 'screenshots');
+
+/** Development pages live in game/dev while the game is being built; they are never part of the entry. */
+const developmentFolder = join(gameSource, 'dev');
+function isShippedGameFile(source: string): boolean {
+  return source !== developmentFolder && !source.startsWith(developmentFolder + sep);
+}
 
 mkdirSync(out, { recursive: true });
-cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
+cpSync(gameSource, join(out, 'game'), { recursive: true, filter: isShippedGameFile });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+if (existsSync(screenshotSource)) cpSync(screenshotSource, join(out, 'screenshots'), { recursive: true });
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
-// files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json).
+// The gate's own limits: only text_max_bytes shapes the dossier's bytes; the others refuse what the
+// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files or 48 MiB
+// under game/; a path under game/ over 1000 bytes).
 writeFileSync(
   join(out, 'dossier.json'),
   buildDossier(out, {
