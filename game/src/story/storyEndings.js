@@ -441,26 +441,27 @@ async function dawnAtTheHideout(act) {
   const { m, crew, summit, scope } = act;
   await m.fadeOut(1.2);
   m.wanted.clear();
-  act.clock.set(6.1);
+  act.clock.set(6.5);
   m.setWeather(0, 1);
   const hideout = m.place('safehouse_dunes') || { x: -690, z: 1118 };
   const base = { x: hideout.x + 4, z: hideout.z + 8 };
-  m.teleportPlayer(base.x - 3.5, base.z + 2.2, Math.PI / 2);
+  m.teleportPlayer(base.x - 1, base.z + 2.6, Math.PI);
   m.game.vehicles?.place?.(summit, base.x - 9, base.z - 4, 0.4);
   let van = act.van;
   if (van && !van.wrecked) m.game.vehicles?.place?.(van, base.x + 9, base.z - 5, -0.5);
   else van = m.spawnVehicle('sahel_caravan', { x: base.x + 9, z: base.z - 5, heading: -0.5, color: VAN_TEAL, parked: true });
   for (const car of [summit, van]) if (car) m.stopDriving(car);
-  placePerson(m, crew.mina, base.x + 1.5, base.z - 2.4, 0);
-  placePerson(m, crew.faris, base.x + 3.6, base.z + 0.6, -Math.PI / 2);
-  placePerson(m, crew.tavi, base.x - 0.8, base.z + 3.2, Math.PI);
-  const shares = buildGoldShares(m, base.x + 0.6, base.z + 0.4, 0, 4);
+  // A tight ring round the four shares: Zayd on the south side, the crew facing him across the gold.
+  placePerson(m, crew.mina, base.x - 1.6, base.z - 2.2, 0);
+  placePerson(m, crew.faris, base.x + 1.7, base.z - 2.1, 0);
+  placePerson(m, crew.tavi, base.x + 4.3, base.z + 1.0, -Math.PI / 2);
+  const shares = buildGoldShares(m, base.x, base.z, 0, 4);
   scope.adopt(() => shares.dispose());
   const zayd = m.game.player.character;
   const raced = m.flag('promisedFarisRace') === true;
   await m.cutscene([
     { position: { x: base.x - 70, y: 22, z: base.z + 60 }, lookAt: { x: base.x, y: 2, z: base.z }, moveTo: { x: base.x - 46, y: 14, z: base.z + 44 }, seconds: 6, fov: 50, speaker: 'radio', text: 'Sarab Gold 98.6. The khamsin has passed. Idris Vane reports nothing stolen.' },
-    shotOf(m, { x: base.x + 0.6, z: base.z + 0.4 }, { bearing: 0.5, distance: 4.5, height: 1.4, look: 0.3, seconds: 4.5, push: 1, speaker: 'mina', text: 'Four shares. I did the maths twice. Then I just looked at it.' }),
+    shotOf(m, { x: base.x, z: base.z }, { bearing: 2.7, distance: 5, height: 1.5, look: 0.3, seconds: 4.5, push: 1.2, speaker: 'mina', text: 'Four shares. I did the maths twice. Then I just looked at it.' }),
     overShoulder(m, crew.faris, zayd, { seconds: 4.5, speaker: 'faris', text: "Vane can't report gold he never declared. Ha! The man is a poem." }),
     overShoulder(m, crew.tavi, zayd, { seconds: 3.5, side: -1, speaker: 'tavi', text: 'Dust. I was wrong about you.' }),
     overShoulder(m, zayd, crew.tavi, { seconds: 4, speaker: 'zayd', text: "No, you weren't. That's the funny part." }),

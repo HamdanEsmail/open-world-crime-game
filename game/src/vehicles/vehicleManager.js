@@ -472,6 +472,7 @@ function createVehicleDynamics(profile, x, z) {
     impactKeys: [null, null, null, null],
     impactTimes: new Float64Array(4),
     impactSizes: new Float64Array(4),
+    impactDamage: new Float64Array(4),
     impactCursor: 0,
     lastImpactTime: -1e9,
     struckPeople: new Float64Array([-1, -1e9, -1, -1e9, -1, -1e9, -1, -1e9]),

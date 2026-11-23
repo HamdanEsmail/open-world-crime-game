@@ -44,8 +44,9 @@ export function createNotificationFeed(game, containers) {
 
   /** A line of dialogue at the bottom centre; `color` tints the speaker's name (each of the cast has one). */
   function showSubtitle(speaker, text, seconds, color) {
-    if (!text) {
+    if (!text || !String(text).trim()) {
       hideAt.subtitle = 0;
+      setShown(subtitle, false);
       return;
     }
     subtitleSpeaker.style.color = typeof color === 'string' ? color : '';

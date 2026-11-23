@@ -8,14 +8,15 @@ import { createPursuitDriver } from './pursuitDriverAI.js';
 import { createOfficerAI } from './officerAI.js';
 import { createArrestProcedure } from './arrestProcedure.js';
 import { createAmbientPatrols } from './ambientPatrols.js';
+import { createChaseFormation } from './chaseFormation.js';
 import { policeUnitsForStars, rammingAllowed, mayArrestPlayer, suspectIsCalm } from './wantedLevelRules.js';
 
 /** Police cars alive at once, all kinds together. */
 const MAX_POLICE_CARS = 10;
-/** Seconds between reshuffles of the chase formation. */
-const ROLE_INTERVAL = 0.4;
 /** Seconds the player counts as violent after shooting or hurting someone. */
 const VIOLENT_SECONDS = 9;
+/** Crews that get out round a stopped car; the rest stay at the wheel. */
+const MAX_CREWS_OUT_AT_CAR = 2;
 
 /**
  * Build game.police.
@@ -29,11 +30,10 @@ export function createPoliceDispatch(game) {
   const arrests = createArrestProcedure(game);
   const patrols = createAmbientPatrols(game, roster, driver, officers, sight);
   const rng = game.rng.fork('police-dispatch');
+  const formation = createChaseFormation(roster.units);
   const ctx = createChaseContext(roster.units);
-  const ranked = [];
   const unitAt = { x: 0, y: 0, z: 0 };
   let spawnTimer = 0;
-  let roleTimer = 0;
   let suspendTimer = 0;
   let violentUntil = -1e9;
   let stoppedFor = 0;
@@ -102,9 +102,11 @@ export function createPoliceDispatch(game) {
     if (ctx.level > 0 && !ctx.playerDown) {
       adoptPatrols();
       sendUnits(dt);
-      assignRoles(dt);
+      formation.assignRoles(ctx, dt);
     }
     const units = roster.units;
+    ctx.deployedCars = 0;
+    for (let i = 0; i < units.length; i += 1) if (units[i].vehicle && units[i].state === 'deployed') ctx.deployedCars += 1;
     for (let i = units.length - 1; i >= 0; i -= 1) {
       if (i < units.length) thinkUnit(units[i], dt);
     }
@@ -156,13 +158,14 @@ export function createPoliceDispatch(game) {
       ctx.curbX = hit ? hit.x : ctx.px;
       ctx.curbZ = hit ? hit.z : ctx.pz;
     }
+    // Searching, units head for the search area (which drifts the way he was going), else where he was.
     const lastKnown = wanted ? wanted.lastKnown : null;
-    ctx.targetX = ctx.pursuit || !lastKnown ? (ctx.onFoot ? ctx.curbX : ctx.px) : lastKnown.x;
-    ctx.targetZ = ctx.pursuit || !lastKnown ? (ctx.onFoot ? ctx.curbZ : ctx.pz) : lastKnown.z;
     const area = wanted && wanted.searchArea;
-    ctx.searchX = area ? area.x : ctx.targetX;
-    ctx.searchZ = area ? area.z : ctx.targetZ;
+    ctx.searchX = area ? area.x : lastKnown ? lastKnown.x : ctx.px;
+    ctx.searchZ = area ? area.z : lastKnown ? lastKnown.z : ctx.pz;
     ctx.searchRadius = area ? area.radius : 60;
+    ctx.targetX = ctx.pursuit || !lastKnown ? (ctx.onFoot ? ctx.curbX : ctx.px) : ctx.searchX;
+    ctx.targetZ = ctx.pursuit || !lastKnown ? (ctx.onFoot ? ctx.curbZ : ctx.pz) : ctx.searchZ;
     ctx.night = game.sky && typeof game.sky.night === 'number' ? game.sky.night : nightFromHour(game.time.hour);
     ctx.ram = rammingAllowed(ctx.level);
     const weapon = game.weapons && game.weapons.current ? game.weapons.current(character) : null;
@@ -362,110 +365,6 @@ export function createPoliceDispatch(game) {
     return least;
   }
 
-  /**
-   * The chase formation: nearest car behind him on the bumper, the next two on his flanks, cars
-   * ahead of him cut him off, the rest trail; a stopped car gets boxed in from four sides; a man on
-   * foot gets every car converging.
-   */
-  function assignRoles(dt) {
-    roleTimer -= dt;
-    if (roleTimer > 0) return;
-    roleTimer = ROLE_INTERVAL;
-    ranked.length = 0;
-    const units = roster.units;
-    for (let i = 0; i < units.length; i += 1) {
-      const unit = units[i];
-      if (unit.mode !== 'response' || !unit.vehicle || unit.vehicle.wrecked) continue;
-      if (unit.state !== 'chasing' && unit.state !== 'responding') continue;
-      let at = ranked.length;
-      ranked.push(unit);
-      while (at > 0 && ranked[at - 1].distance > unit.distance) {
-        ranked[at] = ranked[at - 1];
-        at -= 1;
-      }
-      ranked[at] = unit;
-    }
-    if (ctx.onFoot) {
-      for (let i = 0; i < ranked.length; i += 1) ranked[i].role = 'converge';
-      return;
-    }
-    if (ctx.pspeed < 3.5) {
-      assignBox();
-      return;
-    }
-    let lead = false;
-    let left = false;
-    let right = false;
-    let cutoffs = 0;
-    for (let i = 0; i < ranked.length; i += 1) {
-      const unit = ranked[i];
-      const p = unit.vehicle.pos;
-      const lon = (p.x - ctx.px) * ctx.fx + (p.z - ctx.pz) * ctx.fz;
-      const lat = (p.x - ctx.px) * ctx.rx + (p.z - ctx.pz) * ctx.rz;
-      let role;
-      if (unit.distance > 170) role = 'respond';
-      else if (lon > 18 && cutoffs < 2 && ctx.level >= 2) {
-        role = 'cutoff';
-        cutoffs += 1;
-      } else if (!lead) {
-        role = 'lead';
-        lead = true;
-      } else if (ctx.level >= 2 && !right && (lat >= 0 || left)) {
-        role = 'flankRight';
-        right = true;
-      } else if (ctx.level >= 2 && !left) {
-        role = 'flankLeft';
-        left = true;
-      } else if (ctx.level >= 3 && cutoffs < 2) {
-        role = 'cutoff';
-        cutoffs += 1;
-      } else role = 'trail';
-      unit.role = role;
-    }
-  }
-
-  /**
-   * Four sides round a stopped car, each taken by the nearest free unit; a side where a car already
-   * stands (its crew out) is left to it; the rest hold back.
-   */
-  const BOX_ROLES = ['boxRear', 'boxLeft', 'boxRight', 'boxFront'];
-  function assignBox() {
-    for (let i = 0; i < ranked.length; i += 1) ranked[i].role = 'trail';
-    const L = ctx.pHalfLength;
-    for (let b = 0; b < BOX_ROLES.length; b += 1) {
-      const role = BOX_ROLES[b];
-      const along = role === 'boxRear' ? -(L + 3.4) : role === 'boxFront' ? L + 3.6 : 0;
-      const across = role === 'boxRight' ? 3.4 : role === 'boxLeft' ? -3.4 : 0;
-      const sx = ctx.px + ctx.fx * along + ctx.rx * across;
-      const sz = ctx.pz + ctx.fz * along + ctx.rz * across;
-      if (sideTaken(sx, sz)) continue;
-      let best = null;
-      let bestSq = 50 * 50;
-      for (let i = 0; i < ranked.length; i += 1) {
-        const unit = ranked[i];
-        if (unit.role !== 'trail') continue;
-        const dSq = (unit.vehicle.pos.x - sx) ** 2 + (unit.vehicle.pos.z - sz) ** 2;
-        if (dSq < bestSq) {
-          bestSq = dSq;
-          best = unit;
-        }
-      }
-      if (best) best.role = role;
-    }
-  }
-
-  /** A police car that is not being driven (its crew is out) already stands within 6 m of (x, z). */
-  function sideTaken(x, z) {
-    const units = roster.units;
-    for (let i = 0; i < units.length; i += 1) {
-      const unit = units[i];
-      if (!unit.vehicle || unit.state === 'chasing' || unit.state === 'responding') continue;
-      const p = unit.vehicle.pos;
-      if ((p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) < 36) return true;
-    }
-    return false;
-  }
-
   /** One unit's frame: its officers, getting out and back in, its driving, and whether it is done. */
   function thinkUnit(unit, dt) {
     unit.modeTime += dt;
@@ -499,7 +398,7 @@ export function createPoliceDispatch(game) {
     if (unit.officers.length === 0) return;
     const seated = officers.seatedCount(unit);
     if (unit.state === 'deployed') {
-      const goBack = unit.mode === 'leaving' || ctx.level === 0 || ctx.playerDown && ctx.level === 0
+      const goBack = unit.mode === 'leaving' || ctx.level === 0
         || (!ctx.onFoot && ctx.pspeed > 6 && unit.distance > 16) || unit.distance > 75;
       if (!goBack) {
         unit.recalling = false;
@@ -520,10 +419,13 @@ export function createPoliceDispatch(game) {
     if (unit.mode !== 'response' || seated === 0 || ctx.playerDown) return;
     if (unit.state === 'recovering' || unit.state === 'leaving') return;
     const speed = Math.abs(vehicle.speed);
-    const close = ctx.onFoot ? unit.distance < 30 || (unit.distance < 60 && unit.stuckTime > 2) : unit.distance < 22;
+    const close = ctx.onFoot ? unit.distance < 30 || (unit.distance < 60 && unit.stuckTime > 2) : unit.distance < 16;
     const suspectStopped = ctx.onFoot || (ctx.pspeed < 2.5 && ctx.stoppedFor > 1);
-    if (close && suspectStopped && speed < 3) {
+    // Round a stopped car only two crews get out; the other cars stay manned, ready if he breaks out.
+    const room = ctx.onFoot || ctx.deployedCars < MAX_CREWS_OUT_AT_CAR;
+    if (close && suspectStopped && speed < 3 && room) {
       officers.deploy(unit);
+      ctx.deployedCars += 1;
       if (!ctx.onFoot) officers.shout('stopCar', unit);
     }
   }
@@ -678,7 +580,7 @@ function createChaseContext(units) {
     fx: 0, fz: 1, rx: -1, rz: 0,
     targetX: 0, targetZ: 0, curbX: 0, curbZ: 0, searchX: 0, searchZ: 0, searchRadius: 60,
     night: 0, ram: false, armed: false, aiming: false, fighting: false, violent: false, threatening: false,
-    arrestable: false, stoppedFor: 0, cuffers: 0,
+    arrestable: false, stoppedFor: 0, cuffers: 0, deployedCars: 0,
   };
 }
 

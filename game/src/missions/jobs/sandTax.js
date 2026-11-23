@@ -95,11 +95,14 @@ async function driveOutToTheOasis(m, scene) {
     ['zayd', 'Anything else? Bring you a falcon?'],
     ['dahan', 'Just come back, Karam.'],
   ]));
-  later(m, 38, () => chatter(m, [
-    ['faris', 'You know, we drove this road the year we won the Wadi Rally.'],
-    ['zayd', 'You were sick in a bucket the whole way.'],
-    ['faris', 'A champion\'s bucket, boy.'],
-  ]));
+  later(m, 38, () => {
+    if (scene.atCamp) return;
+    chatter(m, [
+      ['faris', 'You know, we drove this road the year we won the Wadi Rally.'],
+      ['zayd', 'You were sick in a bucket the whole way.'],
+      ['faris', 'A champion\'s bucket, boy.'],
+    ]);
+  });
 
   // The scout sits off the junction; once he sees the Nomad he races for the camp.
   const scout = scene.scout;
@@ -135,6 +138,7 @@ async function driveOutToTheOasis(m, scene) {
   }));
 
   await m.reach(scene.overlook, 22, { stopped: true, label: 'Ridge above the oasis' });
+  scene.atCamp = true;
   m.wanted.lock(0);
   m.police.suspend(400);
   if (!scene.scoutSettled && scoutObjective === null) scene.scoutSettled = true;
@@ -434,7 +438,7 @@ function surveyTheDesert(m) {
     nomadSpot: kerbSpot(m, garagePlace.curbX !== undefined ? garagePlace.curbX : garagePlace.x, (garagePlace.curbZ !== undefined ? garagePlace.curbZ : garagePlace.z) + 4, { facing: -Math.PI / 2 }),
     scoutSpot: { x: junction.x + 34, z: junction.z + 26 },
     camp: null, guards: [], buggy: null, nomad: null, scout: null, chasers: [], ledger: null,
-    alerted: false, scoutSettled: false, home: false,
+    alerted: false, scoutSettled: false, atCamp: false, home: false,
     barks: createBarks(m, { gap: 4.5 }),
     listeners: createListeners(m),
   };

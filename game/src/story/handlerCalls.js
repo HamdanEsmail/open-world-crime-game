@@ -8,7 +8,7 @@ const AUTO_ANSWER = 6;
 /** Seconds between rings of the ringtone. */
 const RING_EVERY = 2.6;
 /** Seconds of idling between jobs before the phone rings by itself, and the least gap between such calls. */
-const QUIET_BEFORE_CALL = 200;
+const QUIET_BEFORE_CALL = 240;
 const UNSCRIPTED_COOLDOWN = 480;
 
 /**

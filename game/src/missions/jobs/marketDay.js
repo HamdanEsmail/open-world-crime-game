@@ -166,7 +166,7 @@ async function chaseQadirsPickup(m, scene) {
   m.objective('Ram Qadir\'s pickup until it stops');
   const pickupMark = m.marker(pickup, { label: 'Qadir', kind: 'enemy', color: 0xe4572e, route: true, radius: 3 });
   const counter = m.counter('PICKUP DAMAGE', 0, 100);
-  later(m, 4, () => chatter(m, [['mina', 'Ram him. A pickup that old dies of shame.']]));
+  later(m, 4, () => scene.chasing && chatter(m, [['mina', 'Ram him. A pickup that old dies of shame.']]));
 
   // A solid ram hurts the pickup more than the crash itself: a chase is won with the bumper.
   let lastRamAt = -10;
@@ -409,10 +409,10 @@ function spawnTheGetaway(m, scene) {
   if (m.resumeFrom === 'chase') m.seat(scene.pickup, scene.qadir, 0);
 }
 
-/** Old Hamid scurries off out of the square once the fists start flying. */
+/** Old Hamid scurries off down the west aisle once the fists start flying. */
 function sendHamidHome(m, scene) {
   const hamid = scene.hamid;
   if (!hamid) return;
   hamid.intent.gesture = null;
-  m.walkTo(hamid, scene.square.x0 + 2, scene.square.z1 - 2, { pace: 'run' }).then(() => m.remove(hamid)).catch(() => {});
+  m.walkTo(hamid, scene.square.x0 + 2, scene.centre.z + scene.aisle, { pace: 'run' }).then(() => m.remove(hamid)).catch(() => {});
 }

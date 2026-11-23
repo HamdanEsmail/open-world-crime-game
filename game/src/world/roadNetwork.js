@@ -327,6 +327,9 @@ function signalFor(lane, elapsed) {
   return Math.abs(lane.dirX) > Math.abs(lane.dirZ) ? phase.ew : phase.ns;
 }
 
+/** Working arrays for findRoute, kept between calls. */
+let routeScratch = null;
+
 /** Dijkstra over the intersections, entered and left through the nearest road segment at each end. */
 function findRoute(roads, fromX, fromZ, toX, toZ) {
   const start = roads.nearestLane(fromX, fromZ, 400);
@@ -341,13 +344,21 @@ function findRoute(roads, fromX, fromZ, toX, toZ) {
   if (startEdge === goalEdge) return [startPoint, goalPoint, target];
 
   const count = roads.nodes.length;
-  const cost = new Float64Array(count).fill(Infinity);
-  const previous = new Int32Array(count).fill(-1);
-  const done = new Uint8Array(count);
-  cost[startEdge.a.id] = Math.hypot(startPoint.x - startEdge.a.x, startPoint.z - startEdge.a.z);
-  cost[startEdge.b.id] = Math.hypot(startPoint.x - startEdge.b.x, startPoint.z - startEdge.b.z);
-  const goalCostA = Math.hypot(goalPoint.x - goalEdge.a.x, goalPoint.z - goalEdge.a.z);
-  const goalCostB = Math.hypot(goalPoint.x - goalEdge.b.x, goalPoint.z - goalEdge.b.z);
+  if (!routeScratch || routeScratch.cost.length !== count) {
+    routeScratch = { cost: new Float64Array(count), previous: new Int32Array(count), done: new Uint8Array(count) };
+  }
+  const { cost, previous, done } = routeScratch;
+  cost.fill(Infinity);
+  previous.fill(-1);
+  done.fill(0);
+  // The partial segments at each end are weighted like whole ones (faster roads count as shorter),
+  // so a car just past a junction is never sent back round it.
+  const startWeight = 22 / (startEdge.speed + 8);
+  const goalWeight = 22 / (goalEdge.speed + 8);
+  cost[startEdge.a.id] = Math.hypot(startPoint.x - startEdge.a.x, startPoint.z - startEdge.a.z) * startWeight;
+  cost[startEdge.b.id] = Math.hypot(startPoint.x - startEdge.b.x, startPoint.z - startEdge.b.z) * startWeight;
+  const goalCostA = Math.hypot(goalPoint.x - goalEdge.a.x, goalPoint.z - goalEdge.a.z) * goalWeight;
+  const goalCostB = Math.hypot(goalPoint.x - goalEdge.b.x, goalPoint.z - goalEdge.b.z) * goalWeight;
   for (let iteration = 0; iteration < count; iteration += 1) {
     let current = -1;
     let lowest = Infinity;

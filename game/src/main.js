@@ -32,9 +32,9 @@ import { createGameContext } from './core/sharedGameObject.js';
 
 /** Start everything on the page's canvas: loading screen, open world, then the title or a saved game. */
 async function bootPortSarab() {
-  const game = createGameContext(document.getElementById('port-sarab-open-world'));
-  window.khamsin = game;
   const query = new URLSearchParams(window.location.search);
+  const game = createGameContext(document.getElementById('port-sarab-open-world'), { antialias: query.get('smooth') !== '0' });
+  window.khamsin = game;
   game.rules = RULE_BOOKS;
   game.catalog.vehicles = VEHICLE_CATALOG;
   game.catalog.vehicleById = vehicleSpecById;
@@ -155,25 +155,47 @@ function listenToMenusAndSettings(game, openWorld) {
   });
 }
 
-/** Low, medium or high: the drawing resolution and whether the sun casts shadows. */
+/**
+ * Low, medium or high: the drawing resolution, the size of the sun's shadow map and how often it is
+ * redrawn (every frame on high, every second frame on medium, no shadows on low).
+ */
 function applyGraphicsQuality(game) {
   const quality = game.settings.quality;
   const device = window.devicePixelRatio || 1;
   renderScale = quality === 'low' ? 0.75 : quality === 'high' ? Math.min(device, 1.5) : Math.min(device, 1);
-  game.sky.sunLight.castShadow = quality !== 'low';
+  shadowInterval = quality === 'high' ? 1 : 2;
+  const sun = game.sky.sunLight;
+  sun.castShadow = quality !== 'low';
+  const mapSize = quality === 'high' ? 2048 : 1024;
+  if (sun.shadow.mapSize.x !== mapSize) {
+    sun.shadow.mapSize.set(mapSize, mapSize);
+    if (sun.shadow.map) {
+      sun.shadow.map.dispose();
+      sun.shadow.map = null;
+    }
+  }
+  game.renderer.shadowMap.autoUpdate = shadowInterval === 1;
+  game.renderer.shadowMap.needsUpdate = true;
   game.renderer.setPixelRatio(renderScale);
   game.renderer.setSize(window.innerWidth, window.innerHeight, false);
 }
 
-/** If the frame rate stays low, draw at a lower resolution rather than stutter. */
+/**
+ * Called before each frame is drawn: redraw the shadows on their interval and, if the frame rate
+ * stays low, redraw them less often and then draw at a lower resolution rather than stutter.
+ */
 function keepFrameRateSmooth(game) {
+  if (shadowInterval > 1 && game.time.frame % shadowInterval === 0) game.renderer.shadowMap.needsUpdate = true;
   if (game.mode !== 'playing' || game.time.fps === 0) return;
   slowFrames = game.time.fps < 27 ? slowFrames + 1 : Math.max(0, slowFrames - 2);
-  if (slowFrames > 240 && renderScale > 0.6) {
+  if (slowFrames < 200) return;
+  slowFrames = 0;
+  if (shadowInterval > 1 && shadowInterval < 4) {
+    shadowInterval += 1;
+  } else if (renderScale > 0.6) {
     renderScale = Math.max(0.6, renderScale - 0.1);
     game.renderer.setPixelRatio(renderScale);
     game.renderer.setSize(window.innerWidth, window.innerHeight, false);
-    slowFrames = 0;
   }
 }
 
@@ -199,6 +221,7 @@ const RULE_BOOKS = {
 const TITLE_SHOT = { orbit: { x: 20, y: 46, z: -470 }, radius: 430, height: 52, speed: 0.03, fov: 50 };
 const TITLE_PLAYER_SPOT = { x: 62, z: -420, heading: 0 };
 let renderScale = 1;
+let shadowInterval = 2;
 let slowFrames = 0;
 
 bootPortSarab();

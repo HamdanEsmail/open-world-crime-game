@@ -1,7 +1,7 @@
 // Vehicles meeting the world: glancing off walls and buildings (and flattening the lamp posts, signs
 // and hydrants that give way), shunting, ramming and spinning each other by mass and by where they
 // are struck, which is what makes a police PIT work, and knocking down whoever steps in front of them.
-import { crashDamageFromImpulse, propGivesWay, personHitDamage } from './drivingRules.js';
+import { crashDamageFromSpeed, propGivesWay, personHitDamage } from './drivingRules.js';
 
 /**
  * Build the collision stage of the vehicle simulation.
@@ -90,9 +90,10 @@ export function createVehicleCollisions(game, vehicles) {
     vehicle.yawRate = yawRate;
     vehicle.speed = vel.x * sinH + vel.z * cosH;
     if (hardestContact && hardest > IMPACT_SPEED) {
-      reportImpact(vehicle, null, hardestContact.collider, hardestImpulse, hardest,
-        hardestContact.px, pos.y + 0.6, hardestContact.pz, hardestContact.nx, hardestContact.nz);
-      damageFromImpulse(vehicle, hardestImpulse, null);
+      // One impact per call, judged by the real closing speed of the hardest contact (never by
+      // how deep it was pushed out, nor by how many posts it touched at once).
+      crash(vehicle, null, hardestContact.collider, hardest, hardestImpulse, hardest,
+        hardestContact.px, pos.y + 0.6, hardestContact.pz, hardestContact.nx, hardestContact.nz, true);
     }
   }
 
@@ -108,7 +109,7 @@ export function createVehicleCollisions(game, vehicles) {
     game.events.emit('prop:broken', {
       collider, x: contact.px, z: contact.pz, vehicle, speed: closing, vx: vehicle.vel.x, vz: vehicle.vel.z,
     });
-    reportImpact(vehicle, null, collider, closing * 60, closing, contact.px, vehicle.pos.y + 0.6, contact.pz, contact.nx, contact.nz);
+    crash(vehicle, null, collider, 0, closing * 60, closing, contact.px, vehicle.pos.y + 0.6, contact.pz, contact.nx, contact.nz, true);
   }
 
   /**
@@ -198,9 +199,11 @@ export function createVehicleCollisions(game, vehicles) {
       const hitter = aFaster ? a : b;
       const struck = aFaster ? b : a;
       const sign = aFaster ? 1 : -1;
-      reportImpact(hitter, struck, null, impulse, closing, hit.px, Math.max(a.pos.y, b.pos.y) + 0.6, hit.pz, nx * sign, nz * sign);
-      damageFromImpulse(a, impulse, b);
-      damageFromImpulse(b, impulse, a);
+      // Each car's share of the closing speed goes by the other's mass: a bus shrugs off a compact.
+      const y = Math.max(a.pos.y, b.pos.y) + 0.6;
+      const hitterShare = aFaster ? shareA : 1 - shareA;
+      crash(hitter, struck, struck, closing * hitterShare, impulse, closing, hit.px, y, hit.pz, nx * sign, nz * sign, true);
+      crash(struck, hitter, hitter, closing * (1 - hitterShare), impulse, closing, hit.px, y, hit.pz, -nx * sign, -nz * sign, false);
     }
   }
 
@@ -429,39 +432,56 @@ export function createVehicleCollisions(game, vehicles) {
     return found;
   }
 
-  /** Emit 'vehicle:collision', at most once per pair every EVENT_COOLDOWN unless the new hit is far harder. */
-  function reportImpact(vehicle, other, collider, impulse, speed, x, y, z, nx, nz) {
+  /**
+   * One impact between a vehicle and one thing (a wall, a post, the ground, another car): the
+   * 'vehicle:collision' event (when `announce`) and damage from `severity`, the speed (m/s) at which
+   * this vehicle met it along the contact normal. Every touch of the same thing within
+   * EVENT_COOLDOWN counts as the same impact: a harder follow-up only adds the difference, so a car
+   * leaning on a palm or wedged between posts is never hurt again and again.
+   */
+  function crash(vehicle, other, key, severity, impulse, speed, x, y, z, nx, nz, announce) {
     const dyn = vehicle.dynamics;
-    const key = other || collider;
     const now = game.time ? game.time.elapsed : 0;
+    const harm = crashDamageFromSpeed(severity, vehicle.maxHealth);
     const ring = dyn.impactKeys;
+    let slot = -1;
     for (let k = 0; k < ring.length; k += 1) {
-      if (ring[k] === key && now - dyn.impactTimes[k] < EVENT_COOLDOWN && impulse < dyn.impactSizes[k] * 2) return;
+      if (ring[k] === key && now - dyn.impactTimes[k] < EVENT_COOLDOWN) {
+        slot = k;
+        break;
+      }
     }
-    const slot = dyn.impactCursor;
-    ring[slot] = key;
-    dyn.impactTimes[slot] = now;
-    dyn.impactSizes[slot] = impulse;
-    dyn.impactCursor = (slot + 1) % ring.length;
-    dyn.lastImpactTime = now;
-    game.events.emit('vehicle:collision', { vehicle, other, collider, impulse, speed, x, y, z, nx, nz });
+    let dealt = harm;
+    let fresh = true;
+    if (slot >= 0) {
+      dealt = harm > dyn.impactDamage[slot] ? harm - dyn.impactDamage[slot] : 0;
+      if (harm > dyn.impactDamage[slot]) dyn.impactDamage[slot] = harm;
+      fresh = impulse >= dyn.impactSizes[slot] * 2;
+      if (fresh) dyn.impactSizes[slot] = impulse;
+    } else {
+      slot = dyn.impactCursor;
+      ring[slot] = key;
+      dyn.impactTimes[slot] = now;
+      dyn.impactSizes[slot] = impulse;
+      dyn.impactDamage[slot] = harm;
+      dyn.impactCursor = (slot + 1) % ring.length;
+    }
+    if (fresh && announce) {
+      dyn.lastImpactTime = now;
+      const collider = other ? null : key === GROUND_KEY ? null : key;
+      game.events.emit('vehicle:collision', { vehicle, other, collider, impulse, speed, x, y, z, nx, nz });
+    }
+    if (dealt > 0) {
+      const source = other && other.driver ? other.driver : null;
+      vehicles.applyDamage(vehicle, dealt, { kind: 'crash', source, other });
+    }
   }
 
-  /** Damage in proportion to the jolt (impulse over mass) beyond what a bumper soaks up. */
-  function damageFromImpulse(vehicle, impulse, other) {
-    const amount = crashDamageFromImpulse(impulse, vehicle.dynamics.profile.mass, vehicle.maxHealth);
-    if (amount <= 0) return;
-    const source = other && other.driver ? other.driver : null;
-    vehicles.applyDamage(vehicle, amount, { kind: 'crash', source, other });
-  }
-
-  /** Report a landing or a terrain wall hit gathered during the physics step. */
+  /** Report a sheer face of ground the car drove into, gathered during the physics step. */
   function reportTerrainImpact(vehicle, speed) {
     if (speed <= IMPACT_SPEED) return;
-    const profile = vehicle.dynamics.profile;
-    const impulse = speed * profile.mass;
-    reportImpact(vehicle, null, null, impulse, speed, vehicle.pos.x, vehicle.pos.y + 0.5, vehicle.pos.z, -Math.sin(vehicle.heading), -Math.cos(vehicle.heading));
-    damageFromImpulse(vehicle, impulse, null);
+    crash(vehicle, null, GROUND_KEY, speed, speed * vehicle.dynamics.profile.mass, speed, vehicle.pos.x, vehicle.pos.y + 0.5,
+      vehicle.pos.z, -Math.sin(vehicle.heading), -Math.cos(vehicle.heading), true);
   }
 
   return {
@@ -578,8 +598,10 @@ const CAR_RESTITUTION = 0.2;
 const CAR_FRICTION = 0.4;
 /** Closing speed (m/s) that counts as a real impact worth an event. */
 const IMPACT_SPEED = 1.5;
-/** Seconds between two collision events for the same pair of things. */
+/** Seconds within which touches of the same thing are one impact (one event, one damage). */
 const EVENT_COOLDOWN = 0.3;
+/** Stands in for the ground itself (a sheer face of terrain) in the impact memory. */
+const GROUND_KEY = { ground: true };
 const PERSON_RADIUS = 0.35;
 const PERSON_MASS = 80;
 /** Seconds after a spinning hit during which a car's slide is not caught by the driving assists. */

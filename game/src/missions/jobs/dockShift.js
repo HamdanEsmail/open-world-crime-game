@@ -167,7 +167,7 @@ async function haulToHangarTwo(m, scene) {
   sendChasers(m, scene);
   watchTheHauler(m, scene);
   waitAtTheHangar(m, scene);
-  later(m, 70, () => ring(m, 'faris', [
+  later(m, 70, () => !scene.arrived && ring(m, 'faris', [
     ['faris', 'Dust! Mina says you are driving a truck that is on fire.'],
     ['zayd', 'Smoking. Not on fire.'],
     ['faris', 'In my day that was the same thing. Be careful, boy.'],

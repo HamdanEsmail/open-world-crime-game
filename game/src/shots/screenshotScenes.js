@@ -1,9 +1,9 @@
 // The staged scenes behind ?shot=<name>: each one puts the real game into a telling moment using
-// its real systems (the player drives, the police really pursue, the job is really running), lets
-// it play for a few seconds, then freezes the frame so a screenshot is the same every time.
+// its real systems (the job is really running, the police really pursue, the HUD shows what it
+// would show), lets it play, then freezes the frame so a screenshot is the same every time.
 // Nothing here draws anything: the picture is the game's own renderer and HUD.
 
-/** Stage the named scene, then set window.shotReady once the frame has settled. */
+/** Stage the named scene, then set window.shotReady once the frozen frame has settled. */
 export async function stageScreenshot(game, name) {
   const scene = SCREENSHOT_SCENES[name] || SCREENSHOT_SCENES.chase;
   const stage = createStage(game);
@@ -12,21 +12,106 @@ export async function stageScreenshot(game, name) {
   game.mode = 'playing';
   game.input.enabled = false;
   game.time.clockRate = 0;
+  game.settings.quality = 'high'; // a still frame can afford the full shadow map
+  game.events.emit('settings:changed', { settings: game.settings, key: 'quality' });
   game.hud.show();
   await scene(game, stage);
   game.staging = null;
-  game.cityFurniture.refresh();
-  await stage.frames(45); // let the minimap tiles, shadows and particles finish drawing
   game.time.paused = true;
-  await stage.frames(4);
+  game.cityFurniture.refresh();
+  await stage.frames(50); // let the minimap tiles, shadows and textures finish drawing
   window.shotReady = true;
 }
 
 /** The scenes by name. */
 export const SCREENSHOT_SCENES = {
-  chase: policeChaseDownVaneBoulevard,
+  chase: getawayRehearsalUnderPursuit,
+  dunes: buggyEscapeOverTheDunes,
+  storm: vaneJobGunfightInTheKhamsin,
   title: titleScreenOverTheSpiresAtDusk,
 };
+
+/**
+ * Job six, "Sand Tax": Faris's Dune Jackal buggy flying off a dune crest toward the hideout with the
+ * Jackals' pickups on its tail and Port Sarab on the horizon.
+ */
+async function buggyEscapeOverTheDunes(game, stage) {
+  game.missions.start('sand_tax', { resumeFrom: 'escape' });
+  await stage.playUntil(() => game.player.vehicle && game.missions.active && game.markers.routeTarget(), 30, () => {
+    if (game.cutscenes.playing) game.cutscenes.skip();
+  });
+  const buggy = game.player.vehicle;
+  stage.driveToRouteTarget(buggy, 27);
+  await stage.play(4);
+  // Fly: play on until the buggy has left a crest and is well clear of the sand.
+  await stage.playUntil(() => !buggy.grounded && buggy.pos.y - game.terrain.heightAt(buggy.pos.x, buggy.pos.z) > 0.9, 22);
+  const chasers = game.vehicles.list
+    .filter((vehicle) => vehicle !== buggy && vehicle.tags.mission && vehicle.driver && !vehicle.wrecked)
+    .sort((a, b) => a.pos.distanceToSquared(buggy.pos) - b.pos.distanceToSquared(buggy.pos));
+  stage.formUp(buggy, chasers, [[5.2, -9, 0.06], [-6.5, -19, -0.05]]);
+  game.cameraRig.holdView(buggy.heading + 0.42, 0.1);
+  game.cameraRig.snap();
+  await stage.play(0.12);
+}
+
+/**
+ * Job ten, "The Vane Job": the finale, fought across the Vane Spire's plaza inside the khamsin,
+ * Zayd aiming at Vane's guards through the blowing sand.
+ */
+async function vaneJobGunfightInTheKhamsin(game, stage) {
+  game.missions.start('the_vane_job', { resumeFrom: 'plaza' });
+  const guards = () => game.characters.list.filter((person) => person.alive && person !== game.player.character && game.weapons.ai.isEngaged(person));
+  await stage.playUntil(() => game.missions.active && guards().length >= 2 && game.weather.sandstorm > 0.85, 60, () => {
+    if (game.cutscenes.playing) game.cutscenes.skip();
+    if (game.phone.ringing) game.phone.answer();
+  });
+  const zayd = game.player.character;
+  zayd.tags.invulnerable = true;
+  await stage.play(2.5);
+  const target = guards().sort((a, b) => a.pos.distanceToSquared(zayd.pos) - b.pos.distanceToSquared(zayd.pos))[0];
+  if (target) {
+    const yaw = Math.atan2(target.pos.x - zayd.pos.x, target.pos.z - zayd.pos.z);
+    game.cameraRig.holdView(yaw, 0.05);
+    stage.aimAndFire(zayd, yaw, 0.02);
+    await stage.play(1.1);
+  }
+  zayd.tags.invulnerable = false;
+}
+
+/**
+ * The cover: job seven, "Dress Rehearsal", as it is played. Three stars locked on, the clock running
+ * to the Gate, PSPD alongside, a roadblock across Vane Boulevard ahead and Shaheen-1 overhead.
+ */
+async function getawayRehearsalUnderPursuit(game, stage) {
+  game.missions.start('dress_rehearsal', { resumeFrom: 'door' });
+  // The job's own opening at the Spire door: the tip-off scene, the handler's call, then three stars.
+  await stage.playUntil(() => game.wanted.level >= 3 && game.missions.active && game.missions.active.timer, 70, () => {
+    if (game.cutscenes.playing) game.cutscenes.skip();
+    if (game.phone.ringing) game.phone.answer();
+  });
+  const car = game.player.vehicle;
+  const lane = 36.25; // the inner southbound lane of Vane Boulevard (its centre line is x = 40)
+  game.vehicles.place(car, lane, -292, 0);
+  game.cameraRig.setYaw(0);
+  game.cameraRig.snap();
+  game.traffic.populateNow();
+  await stage.play(0.1);
+  // Keep the two southbound lanes ahead clear for the run; the northbound side keeps its traffic.
+  for (let z = -285; z <= -130; z += 16) game.traffic.clearArea(lane - 2.6, z, 8.5, 20);
+  stage.driveAlong(car, [{ x: lane, z: -230 }, { x: lane, z: -170 }, { x: lane, z: -100 }], 19);
+  await stage.play(5.2);
+  game.roadblocks.placeAt(lane - 1.5, car.pos.z + 46, 0, { spikes: false, gapSide: 'left', stars: 3 });
+  stage.gatherPursuit(car, [[-3.7, 3.6, -0.04], [-3.5, 19, 0.05], [0.3, -22, 0]]);
+  await stage.play(0.5);
+  game.effects.clear(); // the dust of setting the stage, not of the chase
+  game.pedestrians.refill();
+  game.policeHelicopter.stageAt({
+    x: car.pos.x + 1.5, y: 15.5, z: car.pos.z + 36, heading: Math.PI - 0.35, pitch: 0.16, roll: 0.06,
+    aimX: car.pos.x, aimZ: car.pos.z + 3, light: true,
+  });
+  game.cameraRig.holdView(0.04, 0.15);
+  await stage.play(0.25);
+}
 
 /** The start screen: the main menu over The Spires as the windows light up at dusk. */
 async function titleScreenOverTheSpiresAtDusk(game, stage) {
@@ -34,36 +119,12 @@ async function titleScreenOverTheSpiresAtDusk(game, stage) {
   game.player.teleport(62, -420, 0);
   game.traffic.populateNow();
   game.pedestrians.refill();
-  stage.play(4);
+  await stage.play(4);
   game.cameraRig.setCinematic({ position: { x: 330, y: 74, z: -905 }, lookAt: { x: -40, y: 96, z: -410 }, fov: 46 });
   game.mode = 'menu';
   game.hud.hide();
   game.menus.showMainMenu();
-  stage.play(0.2);
-}
-
-/**
- * The cover: a four-star pursuit down Vane Boulevard at golden hour, seen looking back past the
- * player's Sirocco at the PSPD cars, the helicopter Shaheen-1 and the Vane Spire.
- */
-async function policeChaseDownVaneBoulevard(game, stage) {
-  stage.setClock(17.6);
-  const lane = 36.25; // the inner southbound lane of Vane Boulevard (x = 40)
-  const car = stage.putPlayerInCar('kestrel_sirocco', lane, -470, 0, 0xe4572e);
-  game.pedestrians.refill();
-  stage.driveAlong(car, [{ x: lane, z: -330 }, { x: lane, z: -150 }, { x: lane, z: 20 }, { x: lane, z: 200 }], 23);
-  stage.play(2);
-  game.wanted.set(4);
-  game.wanted.lock(4);
-  stage.play(15);
-  stage.gatherPursuit(car, [[-3.4, -17, 0.08], [3.6, -27, -0.05], [-0.4, -41, 0]]);
-  game.policeHelicopter.stageAt({
-    x: car.pos.x + 13, y: 27, z: car.pos.z - 46, heading: 0.25, pitch: 0.16, roll: -0.06,
-    aimX: car.pos.x, aimZ: car.pos.z, light: true,
-  });
-  game.cameraRig.holdView(Math.PI + 0.36, 0.06);
-  game.cameraRig.snap();
-  stage.play(0.7);
+  await stage.play(0.2);
 }
 
 /** The tools a scene directs the game with. */
@@ -90,9 +151,65 @@ function createStage(game) {
       route = { car, points, speed, index: 0 };
       game.staging = { update: followRoute };
     },
-    /** Let the whole game run for some seconds of its own time. */
-    play(seconds) {
-      game.loop.stepOnce(seconds, 1 / 60);
+    /** Have a car chase the job's current GPS target (its next checkpoint) from now on. */
+    driveToRouteTarget(car, speed) {
+      game.staging = {
+        update() {
+          const marker = game.markers.routeTarget();
+          if (!marker) return;
+          const goal = game.markers.positionOf(marker);
+          game.vehicles.autopilot.driveToward(car, goal.x, goal.z, speed, { holdPace: true, allowReverse: false });
+        },
+      };
+    },
+    /** Have a person on foot hold an aim along a heading and keep the trigger pulled. */
+    aimAndFire(person, yaw, pitch) {
+      game.staging = {
+        update() {
+          const intent = person.intent;
+          intent.moveX = 0;
+          intent.moveZ = 0;
+          intent.aim = true;
+          intent.aimYaw = yaw;
+          intent.aimPitch = pitch;
+          intent.fire = true;
+        },
+      };
+    },
+    /**
+     * Put vehicles into formation round a car at its speed: each slot is
+     * [metres to its left, metres ahead of it (negative is behind), heading offset].
+     */
+    formUp(car, vehicles, slots) {
+      const sin = Math.sin(car.heading);
+      const cos = Math.cos(car.heading);
+      for (let i = 0; i < slots.length && i < vehicles.length; i += 1) {
+        const vehicle = vehicles[i];
+        const [left, ahead, turn] = slots[i];
+        game.vehicles.place(vehicle, car.pos.x + sin * ahead + cos * left, car.pos.z + cos * ahead - sin * left, car.heading + turn);
+        const speed = Math.abs(car.speed);
+        vehicle.vel.set(Math.sin(vehicle.heading) * speed, 0, Math.cos(vehicle.heading) * speed);
+        vehicle.speed = speed;
+        vehicle.controls.throttle = 1;
+        game.vehicles.wake(vehicle);
+      }
+    },
+    /** Let the whole game run for some seconds of its own time (job scripts get their turns between steps). */
+    async play(seconds) {
+      for (let t = 0; t < seconds; t += 1 / 60) {
+        game.loop.stepOnce(1 / 60, 1 / 60);
+        await null;
+      }
+    },
+    /** Let the game run until something is true (or `limit` seconds pass), doing `each` between steps. */
+    async playUntil(condition, limit, each) {
+      for (let t = 0; t < limit; t += 1 / 60) {
+        if (condition()) return true;
+        if (each) each();
+        game.loop.stepOnce(1 / 60, 1 / 60);
+        await null;
+      }
+      return false;
     },
     /** Wait for real frames to be drawn. */
     frames(count) {
@@ -107,14 +224,14 @@ function createStage(game) {
       });
     },
     /**
-     * Bring the nearest pursuing police cars into formation behind a car: each slot is
-     * [metres to the left, metres ahead (negative is behind), heading offset].
+     * Bring the nearest pursuing police cars into formation round a car, at its speed: each slot is
+     * [metres to its left, metres ahead of it (negative is behind), heading offset].
      */
     gatherPursuit(car, slots) {
       const sin = Math.sin(car.heading);
       const cos = Math.cos(car.heading);
       const units = game.police.units
-        .filter((unit) => unit.vehicle && !unit.vehicle.wrecked)
+        .filter((unit) => unit.vehicle && !unit.vehicle.wrecked && !unit.vehicle.tags.roadblock)
         .sort((a, b) => a.vehicle.pos.distanceToSquared(car.pos) - b.vehicle.pos.distanceToSquared(car.pos));
       for (let i = 0; i < slots.length && i < units.length; i += 1) {
         const vehicle = units[i].vehicle;
@@ -122,7 +239,7 @@ function createStage(game) {
         const x = car.pos.x + sin * ahead + cos * left;
         const z = car.pos.z + cos * ahead - sin * left;
         game.vehicles.place(vehicle, x, z, car.heading + turn);
-        const speed = Math.abs(car.speed) + 1.5;
+        const speed = Math.abs(car.speed) + 1;
         vehicle.vel.set(Math.sin(vehicle.heading) * speed, 0, Math.cos(vehicle.heading) * speed);
         vehicle.speed = speed;
         vehicle.controls.siren = true;

@@ -15,6 +15,8 @@ const COOL_SEARCHING = 1.2;
 /** Seconds the police keep track of the player after seeing a crime, and after being given a fix on him (set). */
 const SIGHT_GRACE = 1.6;
 const FIX_GRACE = 8;
+/** Seconds of the suspect's last seen motion the search area is carried along (he kept going). */
+const SEARCH_DRIFT_SECONDS = 6;
 
 /**
  * Build game.wanted.
@@ -27,6 +29,8 @@ export function createWantedLevel(game) {
   let sightGrace = 0;
   let searchElapsed = 0;
   let lastSeenVehicle = null;
+  let lastSeenVX = 0;
+  let lastSeenVZ = 0;
 
   const wanted = {
     /** Stars, 0..5. */
@@ -91,9 +95,11 @@ export function createWantedLevel(game) {
       wanted.lastKnown.x = playerX();
       wanted.lastKnown.z = playerZ();
     } else if (wanted.state !== 'pursuit' && next > 0) {
-      // A fresh lead: the search moves to where it happened and starts again.
+      // A fresh lead: the search moves to where it happened and starts again (no idea which way he went).
       wanted.lastKnown.x = px;
       wanted.lastKnown.z = pz;
+      lastSeenVX = 0;
+      lastSeenVZ = 0;
       beginSearch(px, pz, wanted.state === 'clear');
     }
     changeLevel(next);
@@ -186,6 +192,9 @@ export function createWantedLevel(game) {
       }
       wanted.lastKnown.x = playerX();
       wanted.lastKnown.z = playerZ();
+      const velocity = player.vehicle ? player.vehicle.vel : player.character.vel;
+      lastSeenVX = velocity.x;
+      lastSeenVZ = velocity.z;
       wanted.pursuitTime += dt;
       wanted.searchArea = null;
       wanted.searchProgress = 0;
@@ -199,6 +208,10 @@ export function createWantedLevel(game) {
       // Until a unit reaches the area the search barely runs: nobody is looking yet.
       searchElapsed += dt * (searchersArrived() ? 1 : 0.5);
       area.radius = Math.min(240, 60 + searchElapsed * 5);
+      // The police guess he kept going: the search drifts the way he was last seen heading.
+      const drift = Math.min(searchElapsed, SEARCH_DRIFT_SECONDS);
+      area.x = wanted.lastKnown.x + lastSeenVX * drift;
+      area.z = wanted.lastKnown.z + lastSeenVZ * drift;
       wanted.searchSeconds = searchSecondsForStars(wanted.level, evadePerStar);
       wanted.searchProgress = Math.min(1, searchElapsed / Math.max(1, wanted.searchSeconds));
       if (wanted.points > STAR_HEAT[wanted.level]) wanted.points = Math.max(STAR_HEAT[wanted.level], wanted.points - COOL_SEARCHING * dt);

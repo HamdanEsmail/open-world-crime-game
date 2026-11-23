@@ -18,7 +18,7 @@ export function createVehicleDamage(game, vehicles) {
   function applyDamage(vehicle, amount, info) {
     if (!vehicle || !vehicle.dynamics || !(amount > 0)) return 0;
     const dyn = vehicle.dynamics;
-    if (dyn.exploded || dyn.sunk) return 0;
+    if (dyn.exploded || dyn.sunk || isInvulnerable(vehicle)) return 0;
     const kind = (info && info.kind) || 'crash';
     const source = (info && info.source) || null;
     if (vehicle.wrecked) {
@@ -69,7 +69,7 @@ export function createVehicleDamage(game, vehicles) {
   function explode(vehicle, source) {
     if (!vehicle || !vehicle.dynamics) return;
     const dyn = vehicle.dynamics;
-    if (dyn.exploded) return;
+    if (dyn.exploded || isInvulnerable(vehicle)) return;
     const cause = source || dyn.wreckSource || dyn.lastAttacker || null;
     dyn.exploded = true;
     dyn.enginePower = 0;
@@ -160,7 +160,7 @@ export function createVehicleDamage(game, vehicles) {
   /** The gulf takes it: engine flooded, no fire, no explosion; 'vehicle:sunk' once. */
   function sink(vehicle) {
     const dyn = vehicle.dynamics;
-    if (dyn.sunk) return;
+    if (dyn.sunk || isInvulnerable(vehicle)) return;
     dyn.sunk = true;
     dyn.enginePower = 0;
     dyn.fuse = 0;
@@ -200,6 +200,8 @@ export function createVehicleDamage(game, vehicles) {
         continue;
       }
       if (!dyn.exploded) {
+        // A car a story scene needs (tags.invulnerable) never blows: its fuse waits.
+        if (isInvulnerable(vehicle)) continue;
         dyn.fuse -= dt;
         if (dyn.fuse <= 0) explode(vehicle, dyn.wreckSource);
       } else {
@@ -210,6 +212,11 @@ export function createVehicleDamage(game, vehicles) {
   }
 
   return { applyDamage, explode, blast, sink, repair, refreshEngine, update };
+}
+
+/** Story jobs protect a car through a scene with tags.invulnerable: no damage, fire, explosion or sinking. */
+function isInvulnerable(vehicle) {
+  return !!(vehicle.tags && vehicle.tags.invulnerable === true);
 }
 
 function range(min, max) {

@@ -163,8 +163,28 @@ async function tailLeg(m, scene, points, text) {
   drive.catch(() => {});
   const tail = m.tail(scene.carrier, { min: TAIL.min, max: TAIL.max, grace: TAIL.grace, label: 'Bullion carrier' });
   scene.tailing = true;
+  keepTheRoadClear(m, scene, () => scene.tailing);
   await m.any([drive, tail]);
   scene.tailing = false;
+}
+
+/**
+ * A careful driver waits behind anything stopped in its lane; if the carrier has stood still far
+ * longer than a red light lasts, whatever is stuck in front of it is cleared away.
+ */
+function keepTheRoadClear(m, scene, driving) {
+  const carrier = scene.carrier;
+  let stillFor = 0;
+  aside(m.until(() => {
+    if (!driving()) return true;
+    stillFor = Math.abs(carrier.speed) < 0.5 ? stillFor + m.game.time.dt : 0;
+    if (stillFor > 20) {
+      stillFor = 0;
+      const ahead = aheadOf(carrier, 14);
+      m.clearArea(ahead.x, ahead.z, 12);
+    }
+    return false;
+  }));
 }
 
 /** The carrier waits: Zayd keeps his distance (the tail rules still hold) for `seconds`. */
@@ -289,7 +309,12 @@ async function plantTheTracker(m, scene) {
     tracker.fail();
     m.flag('trackerPlanted', false);
   }
-  if (!isDown(guard) && guard.vehicle !== carrier) m.seat(carrier, guard, 1);
+  // The guard climbs back in (in a hurry if he has just chased someone off).
+  if (!isDown(guard) && guard.vehicle !== carrier) {
+    const door = sideDoorOf(carrier, 1);
+    await m.any([m.walkTo(guard, door.x, door.z, { pace: state.seen ? 'run' : 'walk' }), m.seconds(6)]);
+    if (!isDown(guard) && guard.vehicle !== carrier) m.seat(carrier, guard, 1);
+  }
 }
 
 /** The carrier rolls on to Pier Nine; a looser follow, then a long look from the Corniche. */
@@ -301,6 +326,8 @@ async function followToThePier(m, scene) {
     await m.driveTo(carrier, scene.berth.x, scene.berth.z, { speed: 5, stop: true, careful: true });
   })();
   leg.catch(() => {});
+  let rolling = true;
+  keepTheRoadClear(m, scene, () => rolling);
   const mark = m.marker(carrier, { label: 'Bullion carrier', kind: 'objective', color: 0xffd24a, route: true });
   let farFor = 0;
   const lost = m.failIf(() => {
@@ -309,6 +336,7 @@ async function followToThePier(m, scene) {
     return farFor > 10;
   }, 'You lost the carrier in the docks.');
   await leg;
+  rolling = false;
   lost.stop();
   m.clearMarker(mark);
   chatter(m, [
@@ -460,8 +488,9 @@ function sideDoorOf(carrier, side) {
   return { x: carrier.pos.x + s * along - c * out * side, z: carrier.pos.z + c * along + s * out * side };
 }
 
-/** The Aurum carrier at a kerb with its driver aboard, engine running. */
+/** The Aurum carrier at a kerb with its driver aboard, engine running, the road ahead of it cleared. */
 function spawnTheCarrier(m, scene, spot) {
+  m.clearArea(spot.x, spot.z, 32);
   scene.carrier = m.spawnVehicle('aurum_bullion', { x: spot.x, z: spot.z, heading: spot.heading, color: 0x2b2f36 });
   const driver = m.spawnPerson({ archetype: 'business', kind: 'target', faction: 'aurum', name: 'Aurum driver', x: spot.x, z: spot.z, heading: spot.heading });
   m.seat(scene.carrier, driver, 0);
@@ -480,7 +509,8 @@ function surveyTheRoute(m) {
   const west = -Math.PI / 2;
   const east = Math.PI / 2;
   const north = Math.PI;
-  const carrierSpot = kerbSpot(m, door.curbX, door.curbZ, { facing: west });
+  // On the lane line, not in the parking bays, so no parked car stands in front of it.
+  const carrierSpot = kerbSpot(m, door.curbX, door.curbZ, { facing: west, shift: 0.3 });
   const back = aheadOf({ pos: carrierSpot, heading: carrierSpot.heading }, -62);
   const sundial = landmarkOr(m, 'sundialTower', { x: -63, z: 150 });
   const karak = placeOr(m, 'food_wadi', { x: 803, z: 50 });

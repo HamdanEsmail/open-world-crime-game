@@ -46,10 +46,9 @@ export function airborneWhenWheelsLeaveGround(travel, sag) {
   return travel <= -sag;
 }
 
-/** Crash damage: the jolt (impulse / mass) a bumper cannot soak up. */
-export function crashDamageFromImpulse(impulse, mass, maxHealth) {
-  const jolt = impulse / mass;
-  return jolt > 4.5 ? maxHealth * 0.024 * (jolt - 4.5) : 0;
+/** Crash damage from the closing speed along the contact; under 3 m/s a bump is free. */
+export function crashDamageFromSpeed(closingSpeed, maxHealth) {
+  return closingSpeed > 3 ? maxHealth * 0.025 * (closingSpeed - 3) : 0;
 }
 
 /** Landing damage: stunt ramps are free, a drop off a quay is not. */

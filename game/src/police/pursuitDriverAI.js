@@ -5,6 +5,7 @@
 // out of a jam. It writes vehicle.controls through game.vehicles.autopilot and by hand.
 import * as THREE from 'three';
 import { createPoliceRoadDriving } from './policeRoadDriving.js';
+import { createPoliceDrivingHazards } from './policeDrivingHazards.js';
 import { pitManoeuvreAllowed } from './wantedLevelRules.js';
 
 /** The suspect's recent path: one crumb every TRAIL_STEP seconds, TRAIL_SIZE of them (12 s). */
@@ -27,8 +28,8 @@ export function createPursuitDriver(game) {
   const slot = { x: 0, z: 0, aimX: 0, aimZ: 0, speed: 0, stop: false, arrive: 3 };
   const aim = { x: 0, z: 0, limit: Infinity };
   const driveOptions = { aggression: 0.7, allowReverse: true, stopAtTarget: false, arriveRadius: 3 };
+  const hazards = createPoliceDrivingHazards(game);
   const rayOrigin = new THREE.Vector3();
-  const rayDirection = new THREE.Vector3();
   const rayEnd = new THREE.Vector3();
   const searchRng = game.rng.fork('police-search');
 
@@ -391,7 +392,7 @@ export function createPursuitDriver(game) {
     drive.obstacleTimer -= dt;
     if (drive.obstacleTimer <= 0) {
       drive.obstacleTimer = 0.15;
-      checkObstacles(unit, ctx);
+      hazards.checkObstacles(unit, ctx);
     }
     if (drive.dodgeUntil > ctx.now) {
       tx += -Math.cos(vehicle.heading) * drive.dodge;
@@ -415,64 +416,10 @@ export function createPursuitDriver(game) {
     drive.feelerTimer -= dt;
     if (drive.feelerTimer <= 0) {
       drive.feelerTimer = 0.1;
-      drive.feelerSteer = feelForWalls(vehicle, unit.distance < 12 ? 0.6 : 1);
+      drive.feelerSteer = hazards.feelForWalls(vehicle, unit.distance < 12 ? 0.6 : 1);
     }
     if (drive.feelerSteer !== 0 && !c.reverse) c.steer = Math.max(-1, Math.min(1, c.steer + drive.feelerSteer));
     drive.wantsMove = !(stop && (p.x - tx) * (p.x - tx) + (p.z - tz) * (p.z - tz) < (arrive + 1.5) * (arrive + 1.5));
-  }
-
-  /** Below four stars: brake for people in the road and swing out past slower civilian cars. */
-  function checkObstacles(unit, ctx) {
-    const drive = unit.drive;
-    const vehicle = unit.vehicle;
-    drive.obstacleBrake = 0;
-    const speed = Math.abs(vehicle.speed);
-    if (ctx.level >= 4 || speed < 2) return;
-    const autopilot = game.vehicles.autopilot;
-    const ahead = autopilot.obstacleAhead(vehicle, 6 + speed * 0.8);
-    if (ahead.character) {
-      const person = ahead.character;
-      if (person !== ctx.playerCharacter && person.kind !== 'officer' && ahead.distance < speed * 0.6 + 3) {
-        drive.obstacleBrake = ctx.level <= 2 ? 1 : 0.5;
-      }
-    } else if (ahead.vehicle && ctx.level <= 3) {
-      const other = ahead.vehicle;
-      if (other === ctx.playerVehicle || other.faction === 'police') return;
-      if (ahead.distance < 5 + speed * 0.35 && speed > Math.abs(other.speed) + 2) {
-        const s = Math.sin(vehicle.heading);
-        const c = Math.cos(vehicle.heading);
-        const right = (other.pos.x - vehicle.pos.x) * -c + (other.pos.z - vehicle.pos.z) * s;
-        drive.dodge = right > 0 ? -3.4 : 3.4;
-        drive.dodgeUntil = ctx.now + 0.7;
-      }
-    }
-  }
-
-  /**
-   * Two feelers off the front bumper: a building, wall or container close ahead on one side turns
-   * the wheel the other way. Returns the steering to add.
-   */
-  function feelForWalls(vehicle, strength) {
-    const colliders = game.colliders;
-    const speed = Math.abs(vehicle.speed);
-    if (!colliders || speed < 3) return 0;
-    const profile = vehicle.dynamics.profile;
-    const reach = Math.min(28, 4 + speed * 0.5);
-    const h = vehicle.heading;
-    rayOrigin.set(vehicle.pos.x + Math.sin(h) * profile.halfLength, vehicle.pos.y + 0.7, vehicle.pos.z + Math.cos(h) * profile.halfLength);
-    const left = probe(colliders, h + 0.33, reach);
-    const right = probe(colliders, h - 0.33, reach);
-    let steer = 0;
-    if (left < reach) steer += (1 - left / reach) * 1.1;
-    if (right < reach) steer -= (1 - right / reach) * 1.1;
-    return Math.max(-0.9, Math.min(0.9, steer * strength));
-  }
-
-  function probe(colliders, angle, reach) {
-    rayDirection.set(Math.sin(angle), 0, Math.cos(angle));
-    const hit = colliders.raycast(rayOrigin, rayDirection, reach);
-    if (!hit || !hit.collider || hit.collider.type === 'post') return reach;
-    return hit.distance;
   }
 
   /** From three stars: the PIT from the bumper and side-swipes from the flanks. */
