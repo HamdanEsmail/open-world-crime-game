@@ -42,7 +42,7 @@ export function createCourierRuns(game, activities) {
   const clockTimer = card.timer;
   const outOfVanTimer = { label: 'Back in the van', seconds: OUT_OF_VAN_LIMIT };
   if (depot) {
-    game.markers.add({ kind: 'activity', icon: 'courierDepot', owner: 'courierDepot', pos: { x: depotPose.x, y: 0, z: depotPose.z }, edge: false, color: 0xd8b07a, label: 'Swift Camel Couriers' });
+    game.markers.add({ kind: 'activity', icon: 'courierDepot', owner: 'courierDepot', pos: { x: depot.x, y: 0, z: depot.z }, edge: false, color: 0xd8b07a, label: 'Swift Camel Couriers' });
   }
   let prompt = '';
   refreshPrompt();

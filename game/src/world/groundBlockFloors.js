@@ -5,8 +5,9 @@
 // Southgate. Each open lot gets its own design from groundOpenLots.js.
 import { SURFACE } from './groundSurfaceAtlas.js';
 import { STREET_LEVELS } from './roadSurfaces.js';
-import { layOpenLot, layPool } from './groundOpenLots.js';
+import { layOpenLot, layPool, BLOSSOMS } from './groundOpenLots.js';
 import { subtractRects } from './groundMeshBuilder.js';
+import { pavingForDistrict } from './groundSurfaceRules.js';
 
 let FLOOR = STREET_LEVELS.sidewalk;
 let PAINT = FLOOR + 0.012;
@@ -41,8 +42,9 @@ export function buildBlockFloors(game, ground) {
 
 /** The base paving of a district over one rectangle of a block. */
 function layDistrictPaving(ground, r, district) {
-  const style = FLOOR_STYLES[district.kind] || FLOOR_STYLES.southgate;
-  ground.rect('base', r.x0, r.z0, r.x1, r.z1, FLOOR, style.surface, { tint: style.tint, scale: style.scale, jitter: style.jitter, cell: 45 });
+  const [swatch, tint, scale] = pavingForDistrict(district.kind).floor;
+  const rough = swatch === 'COBBLES' || swatch === 'CONCRETE' || swatch === 'ASPHALT_BLEACHED';
+  ground.rect('base', r.x0, r.z0, r.x1, r.z1, FLOOR, SURFACE[swatch], { tint, scale, jitter: rough ? 0.1 : 0.05, cell: 45 });
 }
 
 /** The details that make each district's floor its own: inlays, boardwalks, earth patches, stains, hatching. */
@@ -73,7 +75,7 @@ function layDistrictAccents(ground, block, district, pieces, rng) {
   } else if (district.kind === 'docks') {
     for (const piece of pieces) {
       const count = Math.floor(((piece.x1 - piece.x0) * (piece.z1 - piece.z0)) / 1400);
-      for (let k = 0; k < count; k += 1) blot(ground, piece, rng, SURFACE.ASPHALT, 0x9a9690, 1.5, 4);
+      for (let k = 0; k < count; k += 1) blot(ground, piece, rng, SURFACE.CONCRETE, 0xb8b4ae, 1.5, 4);
       hatchEdge(ground, piece, rng);
     }
   } else if (district.kind === 'southgate' || district.kind === 'flats') {
@@ -171,14 +173,14 @@ function layVillaGarden(ground, garden, rng) {
     if (xb - xa > 0.5) ground.rect('paint', xa, b.z - path / 2, xb, b.z + path / 2, PAINT, SURFACE.PAVERS, { tint: 0xfff0dc, jitter: 0.04, rotate: true });
   }
   // Bougainvillea along the inside of the back wall.
-  const bloom = rng.pick([0xff4fa8, 0xff6fb8, 0xffa040, 0xe84fd0]);
+  const bloom = rng.pick(BLOSSOMS);
   const back = { n: 's', s: 'n', e: 'w', w: 'e' }[front] || 'n';
   const depth = 1.1;
   const box = back === 'n' ? [garden.x0 + 0.5, garden.z0 + 0.5, garden.x1 - 0.5, garden.z0 + 0.5 + depth]
     : back === 's' ? [garden.x0 + 0.5, garden.z1 - 0.5 - depth, garden.x1 - 0.5, garden.z1 - 0.5]
       : back === 'w' ? [garden.x0 + 0.5, garden.z0 + 0.5, garden.x0 + 0.5 + depth, garden.z1 - 0.5]
         : [garden.x1 - 0.5 - depth, garden.z0 + 0.5, garden.x1 - 0.5, garden.z1 - 0.5];
-  ground.box('solid', box[0], box[1], box[2], box[3], FLOOR, FLOOR + 0.9, SURFACE.PAINT, SURFACE.LAWN, { topTint: bloom, sideTint: 0xc8e8b0, jitter: 0.14, shadeBottom: 0.65 });
+  ground.box('solid', box[0], box[1], box[2], box[3], FLOOR, FLOOR + 0.9, SURFACE.COBBLES, SURFACE.LAWN, { topTint: bloom, sideTint: 0xc8e8b0, jitter: 0.14, shadeBottom: 0.65 });
 }
 
 /** Where a villa's pool goes: in the deepest strip of garden away from the street, or nowhere. */
@@ -209,15 +211,3 @@ function layGardenWall(ground, wall) {
   ground.box('solid', wall.minX, wall.minZ, wall.maxX, wall.maxZ, 0, h - 0.1, SURFACE.PAINT, SURFACE.PAINT, { tint: 0xfff8ee, jitter: 0.04, shadeBottom: 0.8 });
   ground.box('solid', wall.minX - 0.08, wall.minZ - 0.08, wall.maxX + 0.08, wall.maxZ + 0.08, h - 0.1, h, SURFACE.KERB, SURFACE.KERB, { tint: 0xf2dcc0, jitter: 0.03 });
 }
-
-/** The paving of each kind of district. */
-const FLOOR_STYLES = {
-  downtown: { surface: SURFACE.GRANITE, tint: 0xf6f4f0, scale: 1, jitter: 0.05 },
-  marina: { surface: SURFACE.GRANITE, tint: 0xfff6e8, scale: 0.55, jitter: 0.05 },
-  oldtown: { surface: SURFACE.COBBLES, tint: 0xfff2e2, scale: 1, jitter: 0.1 },
-  docks: { surface: SURFACE.CONCRETE, tint: 0xdcdad6, scale: 1, jitter: 0.1 },
-  villas: { surface: SURFACE.PAVERS, tint: 0xfff4e4, scale: 1.3, jitter: 0.05 },
-  strip: { surface: SURFACE.DARK_STONE, tint: 0xffffff, scale: 1, jitter: 0.04 },
-  flats: { surface: SURFACE.CONCRETE, tint: 0xf4f0e8, scale: 0.5, jitter: 0.08 },
-  southgate: { surface: SURFACE.ASPHALT_BLEACHED, tint: 0xece6dc, scale: 1, jitter: 0.1 },
-};

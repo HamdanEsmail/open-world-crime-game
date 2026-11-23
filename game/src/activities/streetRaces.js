@@ -471,7 +471,7 @@ export function createStreetRaces(game, activities) {
     for (const start of starts) {
       if (on && !start.marker) {
         start.marker = game.markers.add({
-          kind: 'race', owner: 'raceStarts', pos: { x: start.pose.x, y: 0, z: start.pose.z }, edge: false,
+          kind: 'race', owner: 'raceStarts', pos: { x: start.place.x, y: 0, z: start.place.z }, edge: false,
           color: RACE_PURPLE, label: start.route.name,
         });
       } else if (!on && start.marker) {

@@ -3,12 +3,11 @@
 // allow it, moving in to cuff him at one or two stars, climbing back in when he drives off, and
 // walking their beat outside the stations when nobody is wanted. What each officer sees is kept
 // fresh by dispatch in officer.ai.eyes.
+import { officersShootAtStars, officerAccuracy } from './wantedLevelRules.js';
 
 /** How far each kind of officer engages from: a patrol pistol, a tactical rifle. */
 const PISTOL_RANGE = 34;
 const RIFLE_RANGE = 58;
-/** Accuracy (0..1) by wanted level; tactical officers shoot better. */
-const ACCURACY_BY_LEVEL = [0, 0.24, 0.32, 0.42, 0.5, 0.58];
 /** Seconds an officer holds a position before looking for a better one. */
 const HOLD_SECONDS = [3, 6];
 /** Officers moving in for the arrest at once. */
@@ -415,16 +414,12 @@ export function createOfficerAI(game, sight) {
   /** May the officers open fire? Three stars and up, always; below that only at a real threat. */
   function allowedToShoot(ctx) {
     if (ctx.playerDown || ctx.level === 0) return false;
-    if (ctx.level >= 3) return true;
-    if (ctx.level === 2) return ctx.onFoot ? ctx.armed || ctx.violent : ctx.violent;
-    return ctx.threatening;
+    return officersShootAtStars(ctx.level, ctx);
   }
 
   /** Accuracy for this unit now: by stars, better for the tactical team, worse at a fast-moving target. */
   function accuracyFor(unit, ctx) {
-    let accuracy = ACCURACY_BY_LEVEL[Math.min(5, ctx.level)] + (unit.tactical ? 0.1 : 0);
-    accuracy *= 1 - Math.min(0.45, ctx.pspeed / 40);
-    return Math.max(0.05, Math.min(0.9, accuracy));
+    return officerAccuracy(ctx.level, unit.tactical, ctx.pspeed);
   }
 
   /**

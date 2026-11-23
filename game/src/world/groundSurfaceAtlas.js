@@ -94,15 +94,15 @@ function paintBleachedAsphalt(u, v, px, py, rgba) {
   const edge = cell.f2 - cell.f1;
   const g = pixelHash(px, py, 4);
   const mottle = (tileFbm(u, v, 6, 6, 3, 5) - 0.5) * 20;
-  let r = 104 + mottle + (g - 0.5) * 16 + (cell.id - 0.5) * 8;
+  let r = 104 + mottle * 0.6 + (g - 0.5) * 14 + (cell.id - 0.5) * 5;
   let gg = r - 2;
   let b = r - 4;
-  if (edge < 0.05) {
-    const t = 1 - edge / 0.05;
-    r -= 34 * t; gg -= 34 * t; b -= 32 * t;
+  if (edge < 0.035) {
+    const t = 1 - edge / 0.035;
+    r -= 18 * t; gg -= 18 * t; b -= 17 * t;
   }
-  const dust = smooth(0.58, 0.8, tileFbm(u, v, 4, 4, 3, 21));
-  r += (196 - r) * dust * 0.45; gg += (168 - gg) * dust * 0.45; b += (122 - b) * dust * 0.45;
+  const dust = smooth(0.62, 0.85, tileFbm(u, v, 4, 4, 3, 21));
+  r += (184 - r) * dust * 0.25; gg += (160 - gg) * dust * 0.25; b += (120 - b) * dust * 0.25;
   setRgb(rgba, r, gg, b);
 }
 
@@ -171,8 +171,8 @@ function paintCobbles(u, v, px, py, rgba) {
     return;
   }
   const dome = 1.1 - cell.f1 * 0.45;
-  const tone = 0.86 + cell.id * 0.24;
-  setRgb(rgba, (204 + (g - 0.5) * 14) * dome * tone, (168 + (g - 0.5) * 12) * dome * tone, (118 + (g - 0.5) * 10) * dome * tone);
+  const tone = 0.88 + cell.id * 0.2;
+  setRgb(rgba, (206 + (g - 0.5) * 14) * dome * tone, (190 + (g - 0.5) * 12) * dome * tone, (164 + (g - 0.5) * 10) * dome * tone);
 }
 
 /** Packed ochre earth with pebbles and darker trodden patches. */
@@ -181,8 +181,8 @@ function paintPackedEarth(u, v, px, py, rgba) {
   const trodden = smooth(0.55, 0.75, tileFbm(u, v, 3, 3, 3, 24)) * -16;
   const g = pixelHash(px, py, 25);
   if (g > 0.993) { setRgb(rgba, 222, 204, 174); return; }
-  const base = mottle + trodden + (g - 0.5) * 12;
-  setRgb(rgba, 192 + base, 148 + base * 0.9, 100 + base * 0.7);
+  const base = mottle * 0.7 + trodden * 0.6 + (g - 0.5) * 12;
+  setRgb(rgba, 200 + base, 170 + base * 0.9, 132 + base * 0.7);
 }
 
 /** Teak decking: boards 15 cm wide running along u, staggered butt joints and grain. */
@@ -206,8 +206,8 @@ function paintConcrete(u, v, px, py, rgba) {
   const fu = u * 2 - Math.floor(u * 2);
   const fv = v * 2 - Math.floor(v * 2);
   const g = pixelHash(px, py, 31);
-  const stain = smooth(0.62, 0.82, tileFbm(u, v, 3, 3, 3, 32)) * -22;
-  let base = 182 + (tileFbm(u, v, 8, 8, 3, 33) - 0.5) * 18 + (g - 0.5) * 10 + stain;
+  const stain = smooth(0.6, 0.85, tileFbm(u, v, 3, 3, 3, 32)) * -9;
+  let base = 184 + (tileFbm(u, v, 8, 8, 3, 33) - 0.5) * 12 + (g - 0.5) * 10 + stain;
   if (Math.min(fu, 1 - fu, fv, 1 - fv) < 0.004) base = 118;
   setRgb(rgba, base, base - 3, base - 9);
 }
@@ -215,12 +215,12 @@ function paintConcrete(u, v, px, py, rgba) {
 /** Watered lawn: blade speckle, clumps and a few sun-yellowed patches. */
 function paintLawn(u, v, px, py, rgba) {
   const g = pixelHash(px, py, 35);
-  const clump = (tileNoise(u, v, 24, 24, 36) - 0.5) * 26;
-  const dry = smooth(0.6, 0.78, tileFbm(u, v, 4, 4, 3, 37));
-  let r = 112 + (g - 0.5) * 26 + clump * 0.5;
-  let gg = 162 + (g - 0.5) * 34 + clump;
-  let b = 70 + (g - 0.5) * 14 + clump * 0.3;
-  r += (150 - r) * dry * 0.5; gg += (152 - gg) * dry * 0.3; b += (70 - b) * dry * 0.4;
+  const clump = (tileNoise(u, v, 24, 24, 36) - 0.5) * 30;
+  const dry = smooth(0.52, 0.78, tileFbm(u, v, 4, 4, 3, 37));
+  let r = 120 + (g - 0.5) * 28 + clump * 0.5;
+  let gg = 158 + (g - 0.5) * 34 + clump;
+  let b = 82 + (g - 0.5) * 14 + clump * 0.3;
+  r += (168 - r) * dry * 0.55; gg += (160 - gg) * dry * 0.35; b += (96 - b) * dry * 0.45;
   setRgb(rgba, r, gg, b);
 }
 
@@ -237,9 +237,9 @@ function paintDarkStone(u, v, px, py, rgba) {
     setRgb(rgba, 220 * glint, 172 * glint, 78 * glint);
     return;
   }
-  const vein = Math.abs(tileFbm(u, v, 4, 4, 3, 40) - 0.5) < 0.01 ? 34 : 0;
-  const base = 44 + (cellHash(sx, sy, 41) - 0.5) * 10 + (g - 0.5) * 6 + vein;
-  setRgb(rgba, base, base + 1, base + 10);
+  const vein = Math.abs(tileFbm(u, v, 4, 4, 3, 40) - 0.5) < 0.01 ? 30 : 0;
+  const base = 70 + (cellHash(sx, sy, 41) - 0.5) * 12 + (g - 0.5) * 6 + vein;
+  setRgb(rgba, base + 4, base, base + 6);
 }
 
 /** Wind-rippled sand: asymmetric ripples a third of a metre apart, warped by the wind, and fine grain. */

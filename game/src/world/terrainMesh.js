@@ -5,6 +5,7 @@
 // turquoise then deep blue as the sea floor falls away under the gulf.
 import * as THREE from 'three';
 import { SURFACE } from './groundSurfaceAtlas.js';
+import { duneColourForSlope, beachWetnessNearWater, terrainCellSizeAtDistance } from './groundSurfaceRules.js';
 
 const TILE = 64;
 const NEAR = { x0: -2560, x1: 2560, z0: -2048, z1: 2560 };
@@ -95,7 +96,7 @@ function createTerrainShape(game, options) {
   const palette = {
     dune: linearColor(0xf8d098), crest: linearColor(0xfff4c8), hollow: linearColor(0xe8b4b4), amber: linearColor(0xffb878),
     beach: linearColor(0xfff6e2), damp: linearColor(0xc4aa92), shallow: linearColor(0x9ae6dc), deep: linearColor(0x1c5e88),
-    dust: linearColor(0xf6e0c0),
+    dust: linearColor(0xf8dcb0),
   };
 
   /** Distance from the edge of the nearest desert road (negative on it). */
@@ -167,20 +168,17 @@ function createTerrainShape(game, options) {
       return out;
     }
     if (z < beachTop + 4) {
-      const wet = 1 - smoothstep(seaLevel + 0.04, seaLevel + 0.4, h);
-      mixInto(out, palette.beach, palette.damp, wet);
+      mixInto(out, palette.beach, palette.damp, beachWetnessNearWater(h - seaLevel));
       const ripple = 0.96 + 0.08 * valueNoise2D(x / 23, z / 9, 71);
       out[0] *= ripple; out[1] *= ripple; out[2] *= ripple;
       return out;
     }
-    const convex = Math.max(-1, Math.min(1, s.convex / 0.5));
-    const lift = smoothstep(0, 13, h);
-    mixInto(out, palette.hollow, palette.dune, smoothstep(-0.7, 0.9, convex * 0.7 + lift * 0.6 - 0.15));
-    mixInto(out, out, palette.crest, smoothstep(0.25, 0.9, convex) * lift * 0.55);
-    const west = Math.max(0, -s.nx * 0.92 - s.nz * 0.38) * 2.2;
-    mixInto(out, out, palette.amber, Math.min(0.45, west));
+    const weights = duneColourForSlope(Math.max(-1, Math.min(1, s.convex / 0.5)), h, -s.nx * 0.92 - s.nz * 0.38);
+    mixInto(out, palette.hollow, palette.dune, weights.slope);
+    mixInto(out, out, palette.crest, weights.crest);
+    mixInto(out, out, palette.amber, weights.glow);
     if (nearRoadCells.has(cellKey(Math.floor(x / 32), Math.floor(z / 32)))) {
-      mixInto(out, out, palette.dust, (1 - smoothstep(4, 26, roadEdgeDistance(x, z))) * 0.5);
+      mixInto(out, out, palette.dust, (1 - smoothstep(3, 24, roadEdgeDistance(x, z))) * 0.85);
     }
     const vary = 0.93 + 0.12 * fractalNoise2D(x / 340, z / 260, 2, 81);
     out[0] *= vary;
@@ -215,24 +213,29 @@ function chooseTileSteps(game, shape) {
       if (shape.holes.some((h) => x0 >= h.x0 && x1 <= h.x1 && z0 >= h.z0 && z1 <= h.z1)) continue;
       const cx = (x0 + x1) / 2;
       const cz = (z0 + z1) / 2;
-      const outside = Math.hypot(Math.max(world.minX - x1, x0 - world.maxX, 0), Math.max(world.minZ - z1, z0 - world.maxZ, 0));
-      let step;
-      if (outside > 300) step = 64;
-      else if (outside > 0) step = 32;
-      else if (shape.holes.some((h) => h.snap && x1 > h.x0 && x0 < h.x1 && z1 > h.z0 - 8 && z0 < h.z1)) step = 8;
-      else {
-        const roadEdge = shape.roadEdgeDistance(cx, cz) - TILE * 0.71;
-        const cityGap = Math.hypot(Math.max(urban.minX - 19 - x1, x0 - urban.maxX - 19, 0), Math.max(urban.minZ - 19 - z1, z0 - urban.maxZ - 19, 0));
-        const nearLandmark = landmarks.some((m) => Math.hypot(cx - m.x, cz - m.z) < m.reach + TILE * 0.71);
-        if (roadEdge < 16) step = 8;
-        else if (roadEdge < 56 || cityGap < 90 || nearLandmark) step = 16;
-        else if (z1 < -700 && z0 > -960) step = 16;
-        else step = 32;
-      }
-      steps[j * nx + i] = step;
+      steps[j * nx + i] = terrainCellSizeAtDistance({
+        outsideWorld: Math.hypot(Math.max(world.minX - x1, x0 - world.maxX, 0), Math.max(world.minZ - z1, z0 - world.maxZ, 0)),
+        quayEdge: shape.holes.some((h) => h.snap && x1 > h.x0 && x0 < h.x1 && z1 > h.z0 - 8 && z0 < h.z1),
+        roadEdge: shape.roadEdgeDistance(cx, cz) - TILE * 0.71,
+        cityGap: Math.hypot(Math.max(urban.minX - 19 - x1, x0 - urban.maxX - 19, 0), Math.max(urban.minZ - 19 - z1, z0 - urban.maxZ - 19, 0)),
+        nearLandmark: landmarks.some((m) => Math.hypot(cx - m.x, cz - m.z) < m.reach + TILE * 0.71),
+        crestError: () => cellError(shape, x0, z0, 32),
+      });
     }
   }
   return steps;
+}
+
+/** How far cells of `step` metres would stray from the true sand at their centres, worst case in the tile. */
+function cellError(shape, x0, z0, step) {
+  let worst = 0;
+  for (let z = z0; z < z0 + TILE; z += step) {
+    for (let x = x0; x < x0 + TILE; x += step) {
+      const corners = shape.height(x, z) + shape.height(x + step, z) + shape.height(x, z + step) + shape.height(x + step, z + step);
+      worst = Math.max(worst, Math.abs(shape.height(x + step / 2, z + step / 2) - corners / 4));
+    }
+  }
+  return worst;
 }
 
 /** Add one tile of `step` metre cells; edges facing coarser neighbours follow the neighbour's samples. */

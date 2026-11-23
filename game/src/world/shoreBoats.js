@@ -108,7 +108,7 @@ function buildHull(props, length, beam, freeboard, deckColour, stripe) {
     for (const side of [-1, 1]) {
       const ax = side * a.half;
       const bx = side * b.half;
-      const quad = (p0, p1, p2, p3, colour) => (side > 0 ? props.quad(p0, p1, p2, p3, colour) : props.quad(p1, p0, p3, p2, colour));
+      const quad = (p0, p1, p2, p3, colour) => (side > 0 ? props.quad(p1, p0, p3, p2, colour) : props.quad(p0, p1, p2, p3, colour));
       quad([ax * 0.7, keel, a.z], [bx * 0.7, keel, b.z], [bx, 0.05, b.z], [ax, 0.05, a.z], BOTTOM);
       quad([ax, 0.05, a.z], [bx, 0.05, b.z], [bx, b.sheer - 0.22, b.z], [ax, a.sheer - 0.22, a.z], HULL);
       quad([ax, a.sheer - 0.22, a.z], [bx, b.sheer - 0.22, b.z], [bx, b.sheer, b.z], [ax, a.sheer, a.z], stripe);

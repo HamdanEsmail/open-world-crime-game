@@ -2,6 +2,7 @@
 // gutters, clean intersection squares, raised planted medians down the boulevards, and 5 m sidewalks
 // of pale stone pavers behind granite kerbs that drop flush to the road at every crossing.
 import { SURFACE, SURFACE_METRES } from './groundSurfaceAtlas.js';
+import { pavingForDistrict } from './groundSurfaceRules.js';
 
 /**
  * Heights of the street surfaces, metres. Sidewalks and block floors stand where game.terrain says
@@ -298,14 +299,14 @@ function layMedian(ground, edge, city) {
 
 /** Low clipped hedges in segments, leaving gaps where palms and lamp posts can stand. */
 function layMedianHedges(ground, alongX, centre, s0, s1, district) {
-  const segment = 13;
+  const segment = 18;
   const gap = 4;
   const flowering = district.kind === 'beach' || district.kind === 'marina' || district.kind === 'villas' || district.kind === 'strip';
   let index = 0;
   for (let s = s0 + 3; s + segment <= s1 - 2; s += segment + gap) {
     const blossom = flowering && index % 3 === 1;
-    const tint = blossom ? 0xff5fb4 : 0xd8f0c0;
-    const surface = blossom ? SURFACE.PAINT : SURFACE.LAWN;
+    const tint = blossom ? 0xff5fa8 : 0xd8f0c0;
+    const surface = blossom ? SURFACE.COBBLES : SURFACE.LAWN;
     const h = STREET_LEVELS.median + 0.42;
     if (alongX) ground.box('solid', s, centre - 0.65, s + segment, centre + 0.65, STREET_LEVELS.median, h, surface, surface, { tint, sideTint: tint, jitter: 0.1, shadeBottom: 0.7 });
     else ground.box('solid', centre - 0.65, s, centre + 0.65, s + segment, STREET_LEVELS.median, h, surface, surface, { tint, sideTint: tint, jitter: 0.1, shadeBottom: 0.7, rotate: true });
@@ -391,7 +392,7 @@ function evenStations(start, end, spacing) {
  * lighter, an oil streak down the middle of each lane.
  */
 function profileFor(half) {
-  const sideOfStreet = [[-7.5, 0.82], [-7.05, 0.95], [-6.1, 0.93], [-4.75, 1], [-2.6, 1.08], [-1.75, 0.95], [-0.9, 1.08]];
+  const sideOfStreet = [[-7.5, 0.82], [-7.05, 0.95], [-4.75, 1], [-2.6, 1.08], [-1.75, 0.95], [-0.9, 1.08]];
   const sideOfBoulevard = [[-14, 0.82], [-13.45, 0.95], [-8.05, 1.07], [-7.25, 0.95], [-6.45, 1.07], [-4.55, 1.07], [-3.75, 0.95], [-2.95, 1.07], [-2, 0.97]];
   const side = half > 10 ? sideOfBoulevard : sideOfStreet;
   const scale = half / -side[0][0];
@@ -408,16 +409,8 @@ function asphaltTintFor(district) {
   return ASPHALT_TINT;
 }
 
-/** The paving of a district's sidewalks: swatch, tint and scale. */
+/** The paving of a district's sidewalks: swatch, tint and scale, from the district paving rules. */
 function sidewalkStyleFor(district) {
-  switch (district && district.kind) {
-    case 'downtown': return { surface: SURFACE.PAVERS, tint: 0xf6f4f2, scale: 1 };
-    case 'marina': return { surface: SURFACE.PAVERS, tint: 0xfff6e6, scale: 1 };
-    case 'oldtown': return { surface: SURFACE.PAVERS, tint: 0xf8dcb8, scale: 1.2 };
-    case 'docks': return { surface: SURFACE.CONCRETE, tint: 0xe2e0dc, scale: 0.375 };
-    case 'villas': return { surface: SURFACE.PAVERS, tint: 0xfff0dc, scale: 1 };
-    case 'strip': return { surface: SURFACE.PAVERS, tint: 0xe8d8d4, scale: 1 };
-    case 'flats': return { surface: SURFACE.CONCRETE, tint: 0xf0ece4, scale: 0.375 };
-    default: return { surface: SURFACE.CONCRETE, tint: 0xe8e2d8, scale: 0.375 };
-  }
+  const [swatch, tint, scale] = pavingForDistrict(district && district.kind).walk;
+  return { surface: SURFACE[swatch], tint, scale };
 }

@@ -67,8 +67,8 @@ function layMarina(game, ground, props, rng) {
     ground.box('solid', parapetX0, marina.minZ + 2, parapetX0 + 0.7, top - 1, WALK, WALK + 0.75, SURFACE.CONCRETE, SURFACE.CONCRETE, { tint: 0xf2ece2, jitter: 0.05 });
     seaFace(ground, terrain, edge, marina.minZ, edge, promenadeEnd, seaward, WALK);
     wallFace(ground, x0, marina.minZ, x1, marina.minZ, 0, -1, -6.8, WALK, 0xd8d0c4);
-    for (let z = marina.minZ + 1; z < top + 20; z += rng.range(2.6, 3.6)) {
-      const r = rng.range(1.3, 2.1);
+    for (let z = marina.minZ + 1; z < top + 12; z += rng.range(3.6, 5)) {
+      const r = rng.range(1.6, 2.4);
       props.boulder(edge + seaward * rng.range(0.6, 2.2), Math.min(terrain.baseHeightAt(edge + seaward * 2, z), -0.2) + r * 0.25, z, r, rng.pick([0xb8aa96, 0xa89a88, 0xc4b6a0]), rng);
     }
     for (let k = 0; k < 7; k += 1) {

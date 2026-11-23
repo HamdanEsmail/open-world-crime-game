@@ -3,7 +3,7 @@
 // cash, arrests, deaths), follows the player's car and radio, sirens, traffic and footsteps, keeps the
 // city's ambience under it all, and muffles the world for pauses and close calls.
 import { createAudioEngine } from './audioEngine.js';
-import { playSoundRecipe, soundBusFor, SOUND_IDS } from './soundEffects.js';
+import { playSoundRecipe, soundBusFor, SOUND_IDS, SOUND_ALIASES } from './soundEffects.js';
 import { gunSoundForWeaponModel } from './radioAndSoundGuide.js';
 import { createPlayerCarSound, createTrafficEngines } from './engineSound.js';
 import { createSirenChorus } from './sirenSound.js';
@@ -43,6 +43,8 @@ export function createAudio(game) {
   let wasGrounded = true;
   let lastCash = 0;
   let lastNotify = 0;
+  let crowdWindowStart = -10;
+  let crowdVoices = 0;
   let warned = false;
 
   const audio = {
@@ -76,13 +78,16 @@ export function createAudio(game) {
   /**
    * Play a one-shot by id. Options: x, y, z (world position; omit for a sound in the player's head),
    * volume, pitch, intensity (how hard: a crash, an explosion), variant / surface / className, level,
-   * range (metres it carries), delay (seconds). Unknown ids are ignored. Returns true if it sounded.
+   * range (metres it carries), delay (seconds). Aliases (menuOpen, purchase, jobDone, jobBlown,
+   * knockedOut) play their sound; unknown ids are ignored. Returns true if it sounded.
    */
   function play(id, options) {
-    if (!engine.isLive() || !known.has(id)) return false;
+    const sound = SOUND_ALIASES[id] || id;
+    if (!engine.isLive() || !known.has(sound)) return false;
+    if ((sound === 'scream' || sound === 'shout') && !crowdVoiceAllowed()) return false;
     try {
       const o = options || NO_OPTIONS;
-      const bus = soundBusFor(id);
+      const bus = soundBusFor(sound);
       const placed = bus !== 'ui' && options && typeof options.x === 'number' && typeof options.z === 'number';
       voiceOptions.x = placed ? options.x : undefined;
       voiceOptions.y = placed ? options.y : undefined;
@@ -99,11 +104,31 @@ export function createAudio(game) {
       recipeParams.level = o.level || 0;
       recipeParams.distance = voice.distance || 0;
       const when = engine.ctx.currentTime + 0.005 + (options && options.delay ? options.delay : 0);
-      voice.endTime = playSoundRecipe(engine.ctx, voice.input, id, when, recipeParams);
+      voice.endTime = playSoundRecipe(engine.ctx, voice.input, sound, when, recipeParams);
       return true;
     } catch (error) {
       warnOnce(error);
       return false;
+    }
+  }
+
+  /** At most a few screams and shouts a second across the whole city, however many people panic. */
+  function crowdVoiceAllowed() {
+    const now = engine.ctx.currentTime;
+    if (now - crowdWindowStart >= 1) {
+      crowdWindowStart = now;
+      crowdVoices = 0;
+    }
+    if (crowdVoices >= CROWD_VOICES_PER_SECOND) return false;
+    crowdVoices += 1;
+    return true;
+  }
+
+  /** People bolting together: a few screams, staggered and scattered around where it started. */
+  function panicCluster(x, z, count) {
+    const n = Math.max(2, Math.min(3, Math.round(count) - 1 || 2));
+    for (let i = 0; i < n; i += 1) {
+      play('scream', { x: x + (Math.random() - 0.5) * 8, y: 1.6, z: z + (Math.random() - 0.5) * 8, volume: 0.85, pitch: 0.85 + Math.random() * 0.4, delay: i * 0.13 + Math.random() * 0.1 });
     }
   }
 
@@ -313,41 +338,53 @@ export function createAudio(game) {
       const storm = num(e.sandstorm, num(e.intensity, game.weather?.sandstorm || 0));
       if (storm > 0.2) play('windGust', { intensity: Math.min(1, 0.5 + storm) });
     });
+    on('pedestrians:panic', (e) => {
+      const x = num(e.x, NaN);
+      const z = num(e.z, NaN);
+      if (Number.isFinite(x) && Number.isFinite(z)) panicCluster(x, z, num(e.count, 3));
+    });
     on('player:enteredVehicle', (e) => carSound.vehicleEntered(e.vehicle));
     on('player:exitedVehicle', (e) => carSound.vehicleExited(e.vehicle));
   }
 
-  /** A gunshot at the shooter, an impact (and now and then a ricochet) where it hit, a whiz if it passed close. */
+  /**
+   * A gunshot at the shooter, an impact where it landed (none for a miss into the sky), now and then a
+   * ricochet, and a whiz if it passed close. The event object is pooled: only its numbers are read here.
+   */
   function onShotFired(e) {
     const x = num(e.x, NaN);
     const z = num(e.z, NaN);
     if (!Number.isFinite(x) || !Number.isFinite(z)) return;
-    const catalog = game.catalog;
-    let spec = null;
-    if (catalog && typeof catalog.weaponById === 'function') spec = catalog.weaponById(e.weaponId);
-    else if (catalog && catalog.weaponById && typeof catalog.weaponById.get === 'function') spec = catalog.weaponById.get(e.weaponId);
-    const gunSound = gunSoundForWeaponModel(spec?.model || spec?.className || spec?.kind || e.weaponId);
-    const byPlayer = e.shooter && e.shooter === game.player?.character;
-    play(gunSound, { x, y: num(e.y, 1.4), z, range: 340, volume: byPlayer ? 1 : 0.9 });
+    const y = num(e.y, 1.4);
+    const hit = e.hit;
+    const material = hit ? impactMaterial(hit, e.target, num(e.hitX, x), num(e.hitZ, z)) : null;
+    const byPlayer = !!e.isPlayer || (!!e.shooter && e.shooter === game.player?.character);
+    play(gunSoundForWeaponModel(e.model || weaponModelOf(e.weaponId)), { x, y, z, range: 340, volume: byPlayer ? 1 : 0.9 });
     const hx = num(e.hitX, NaN);
     const hz = num(e.hitZ, NaN);
-    if (Number.isFinite(hx) && Number.isFinite(hz)) {
-      const hy = num(e.hitY, 1);
-      const material = impactMaterial(e.hit, hx, hz);
+    if (!Number.isFinite(hx) || !Number.isFinite(hz)) return;
+    const hy = num(e.hitY, 1);
+    if (material) {
       play('bulletImpact', { x: hx, y: hy, z: hz, variant: material, volume: 0.8 });
       if ((material === 'concrete' || material === 'metal') && Math.random() < 0.18) play('ricochet', { x: hx, y: hy, z: hz, volume: 0.7, delay: 0.01 });
-      if (!byPlayer) bulletWhizPast(x, num(e.y, 1.4), z, hx, hy, hz);
     }
+    if (!byPlayer) bulletWhizPast(x, y, z, hx, hy, hz);
   }
 
-  function impactMaterial(hit, x, z) {
-    if (hit && typeof hit === 'object') {
-      if (hit.spec) return 'metal';
-      if (hit.maxHealth !== undefined || hit.intent || hit.kind === 'civilian' || hit.kind === 'officer') return 'flesh';
-    }
+  /** The weapon's class from the catalogue, for events that carry only the weapon's id. */
+  function weaponModelOf(weaponId) {
+    const lookup = game.catalog?.weaponById;
+    const spec = typeof lookup === 'function' ? lookup(weaponId) : lookup && typeof lookup.get === 'function' ? lookup.get(weaponId) : null;
+    return spec?.model || spec?.className || spec?.kind || weaponId;
+  }
+
+  /** What a round struck: a car's metal, a person, or the world's ground (sand, water, else concrete). */
+  function impactMaterial(hit, target, x, z) {
+    if (hit === 'vehicle' || (target && target.spec)) return 'metal';
+    if (hit === 'character') return 'flesh';
     if (game.terrain?.isWater && game.terrain.isWater(x, z)) return 'water';
     const surface = game.terrain?.surfaceAt ? game.terrain.surfaceAt(x, z) : 'road';
-    return surface === 'sand' || surface === 'beach' ? 'sand' : 'concrete';
+    return surface === 'sand' || surface === 'beach' ? 'sand' : surface === 'water' ? 'water' : 'concrete';
   }
 
   /** When a bullet's path passes within a few metres of the player, play the crack-whiz of its passing. */
@@ -378,6 +415,9 @@ export function createAudio(game) {
 }
 
 const NO_OPTIONS = Object.freeze({});
+
+/** The most screams and shouts that may start in any one second. */
+const CROWD_VOICES_PER_SECOND = 4;
 
 /** Stands in for a car while the main menu is up, so the radio tunes Sarab Gold behind it. */
 const MENU_LISTENER = Object.freeze({ id: 0, spec: Object.freeze({ className: 'classic' }) });

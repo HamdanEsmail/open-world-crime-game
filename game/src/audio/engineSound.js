@@ -24,8 +24,8 @@ export function createPlayerCarSound(engine, game) {
   const state = { rpm: 0, throttle: 0, speed: 0, gear: 1, slip: 0, surface: 'road', health: 1, time: 0, running: true, airborne: false };
 
   /**
-   * The player got in: door shuts, the starter cranks, the engine catches. Called by the event and by
-   * the frame check, whichever comes first; the second call for the same car is ignored.
+   * The player got in: the starter cranks and the engine catches (the player system shuts the door).
+   * Called by the event and by the frame check, whichever comes first; the second call is ignored.
    */
   function vehicleEntered(vehicle) {
     if (!engine.isLive() || !vehicle) return;
@@ -36,18 +36,16 @@ export function createPlayerCarSound(engine, game) {
     if (!(announced === vehicle && t - announcedAt < 3)) {
       announced = vehicle;
       announcedAt = t;
-      playAt('doorClose', t, vehicle, null);
       if (!vehicle.wrecked) playAt('engineStart', t + 0.12, vehicle, { className });
     }
     if (rigVehicle !== vehicle) attach(vehicle, Math.max(t, announcedAt + delay));
   }
 
-  /** The player got out: the engine dies away and the door opens. */
+  /** The player got out: the engine dies away (the player system opens the door). */
   function vehicleExited(vehicle) {
     if (!engine.isLive() || !vehicle || exitedFrom === vehicle) return;
     const t = engine.ctx.currentTime;
     if (!vehicle.wrecked && rigVehicle === vehicle) playAt('engineStop', t, vehicle, { className: vehicle.spec?.className });
-    playAt('doorOpen', t + 0.05, vehicle, null);
     detach(t);
     exitedFrom = vehicle;
     announced = null;

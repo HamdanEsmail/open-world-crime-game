@@ -4,6 +4,7 @@
 // covers and oil stains that make the asphalt look driven on.
 import { SURFACE } from './groundSurfaceAtlas.js';
 import { CROSSING, STREET_LEVELS } from './roadSurfaces.js';
+import { roadMarkingsForKind, crosswalkStripesAcross } from './groundSurfaceRules.js';
 
 const WHITE = 0xfffaf0;
 const LINE = 0.15;
@@ -72,25 +73,27 @@ function paintLaneLines(ground, edge, lane, city) {
       ground.bar('paint', ax, az, bx, bz, width, y, surface, { tint, jitter: 0.03 });
     }
   };
+  const rule = roadMarkingsForKind(edge.kind);
   if (edge.kind === 'street') {
-    line(0, 0.13, 3, 5, WHITE);
-    line(4.75, 0.12, 0, 0, WHITE);
-    line(-4.75, 0.12, 0, 0, WHITE);
+    line(0, 0.13, rule.centre[0], rule.centre[1], WHITE);
+    line(rule.bayLine, 0.12, 0, 0, WHITE);
+    line(-rule.bayLine, 0.12, 0, 0, WHITE);
     return;
   }
   const corniche = edge.name === city.streets[0].name;
-  const divider = edge.median / 2 + 3.5;
-  const laneEdge = edge.median / 2 + 7.05;
+  const [fromMedian, dash, gap] = rule.divider;
   for (const side of [-1, 1]) {
-    line(side * divider, LINE, 3.5, 8.5, WHITE);
-    line(side * laneEdge, LINE, 0, 0, WHITE);
+    line(side * (edge.median / 2 + fromMedian), LINE, dash, gap, WHITE);
+    line(side * (edge.median / 2 + rule.edge), LINE, 0, 0, WHITE);
     if (corniche) {
-      line(side * 11.5, 2.1, 0, 0, 0x34a89e, SURFACE.PAINT, COLOURED_LANE_Y);
-      line(side * 10.35, 0.12, 1.2, 1.2, WHITE);
-      line(side * 12.65, 0.12, 0, 0, WHITE);
+      const [centre, width] = rule.cycleLane;
+      line(side * centre, width, 0, 0, 0x34a89e, SURFACE.PAINT, COLOURED_LANE_Y);
+      line(side * (centre - width / 2 - 0.3), 0.12, 1.2, 1.2, WHITE);
+      line(side * (centre + width / 2 + 0.3), 0.12, 0, 0, WHITE);
     } else {
-      line(side * 11.1, 3.4, 0, 0, 0xb85a44, SURFACE.PAINT, COLOURED_LANE_Y);
-      line(side * 12.9, 0.2, 0, 0, WHITE);
+      const [centre, width] = rule.busLane;
+      line(side * centre, width, 0, 0, 0xb85a44, SURFACE.PAINT, COLOURED_LANE_Y);
+      line(side * (centre + width / 2 + 0.1), 0.2, 0, 0, WHITE);
     }
   }
 }
@@ -135,7 +138,7 @@ function paintTurnArrow(ground, lane, tipS, offset, toward, turn, side) {
 /** The ticks between parking bays along both kerbs, where the plan parks its cars. */
 function paintParkingBays(ground, edge, lane) {
   const clear = 34;
-  const spacing = 7.5;
+  const spacing = roadMarkingsForKind('street').bays;
   const first = lane.a + clear;
   const last = lane.b - clear;
   if (last < first) return;
@@ -165,36 +168,14 @@ function weatherAsphalt(ground, edge, lane, rng) {
   }
   for (let s = lane.start + rng.range(10, 40); s < lane.end - 8; s += rng.range(45, 90)) {
     const [cx, cz] = lane.point(s, laneCentre(rng.sign(), rng.int(0, lanes - 1)));
-    const ring = [];
-    for (let i = 0; i < 7; i += 1) {
-      const angle = (i / 7) * Math.PI * 2;
-      ring.push([cx + Math.sin(angle) * 0.42, cz + Math.cos(angle) * 0.42]);
-    }
-    ground.polygon('paint', ring, STAIN_Y, SURFACE.KERB, { tint: 0x6a6660, jitter: 0.05, scale: 0.25 });
-  }
-  for (const [stop, side, toward] of [[lane.stopA, lane.sideA, -1], [lane.stopB, -lane.sideA, 1]]) {
-    for (let index = 0; index < lanes; index += 1) {
-      const offset = laneCentre(side, index);
-      const s0 = stop - toward * 1.6;
-      const s1 = stop - toward * rng.range(6, 8.5);
-      const w = rng.range(0.45, 0.65);
-      const stain = [];
-      for (let k = 0; k < 8; k += 1) {
-        const angle = (k / 8) * Math.PI * 2;
-        stain.push(lane.point((s0 + s1) / 2 + Math.cos(angle) * (s1 - s0) * 0.5, offset + Math.sin(angle) * w));
-      }
-      ground.polygon('paint', stain, STAIN_Y, SURFACE.ASPHALT, { tint: 0xc4c4c8, jitter: 0.05 });
-    }
+    ground.polygon('paint', [[cx - 0.4, cz - 0.4], [cx + 0.4, cz - 0.4], [cx + 0.4, cz + 0.4], [cx - 0.4, cz + 0.4]], STAIN_Y, SURFACE.KERB, { tint: 0x6a6660, jitter: 0.05, scale: 0.25 });
   }
 }
 
 /** A zebra crossing across one arm of a junction, and the tactile paving where it meets each kerb. */
 function paintCrosswalk(ground, crossing) {
   const { alongX, from, to, line, half } = crossing;
-  const pitch = 1.3;
-  const bar = 0.68;
-  const width = half * 2 - 1.0;
-  const count = Math.floor(width / pitch);
+  const { count, pitch, bar } = crosswalkStripesAcross(half * 2);
   const first = line - (count * pitch) / 2 + (pitch - bar) / 2 + bar / 2;
   for (let k = 0; k < count; k += 1) {
     const c = first + k * pitch;

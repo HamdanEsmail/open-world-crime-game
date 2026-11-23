@@ -65,7 +65,7 @@ export const job = {
     m.failIfLeft(suv, 160, 'You abandoned the Oryx.');
     m.wanted.set(2);
     m.objective('Lose the police');
-    m.say([['mina', 'Two stars. So the valet was awake after all.'], ['mina', 'Shake them off. Back streets, Dust. Not the Corniche.']]);
+    if (!m.game.phone || !m.game.phone.inCall) m.say([['mina', 'Two stars. So the valet was awake after all.'], ['mina', 'Shake them off. Back streets, Dust. Not the Corniche.']]);
     await m.lostWanted();
 
     m.say([['mina', 'Clean. Now Haddad Motors, and barely a scratch, remember.']]);

@@ -3,10 +3,11 @@
 // in Jasmine Heights, the hotel forecourt, the marina promenade, a dense grove at the Ain Zahra oasis
 // and a few lonely palms by the desert highway. Trunks are solid; crowns sway and cast long shadows.
 import {
-  paintFoliageAtlas, buildDatePalmGeometry, buildFanPalmGeometry, buildShrubGeometry,
-  buildFlowerBedGeometry, buildFloweringTreeGeometry,
+  buildDatePalmGeometry, buildFanPalmGeometry, buildShrubGeometry, buildFlowerBedGeometry, buildFloweringTreeGeometry,
 } from './palmModels.js';
+import { paintFoliageAtlas } from './palmFoliageAtlas.js';
 import { createPropRecord } from './propInstancing.js';
+import { palmSpacingAlongRoad, palmHeightVariant } from './streetFurnitureRules.js';
 
 /** How far date palms are drawn, metres: the full model up close, then a light one, then a lighter one. */
 const NEAR_PALM_RANGE = 220;
@@ -86,22 +87,24 @@ export function createPalmTrees(game, kit) {
 
   /** The street palms: boulevard medians every 18 m, and both sides of the Corniche. */
   function placeStreetPalms() {
+    const avenueStep = palmSpacingAlongRoad('boulevard');
+    const kerbStep = palmSpacingAlongRoad('street');
     for (const run of map.medianRuns) {
       const length = run.to - run.from;
-      const count = Math.floor(length / 18);
-      const start = run.from + (length - count * 18) / 2;
+      const count = Math.floor(length / avenueStep);
+      const start = run.from + (length - count * avenueStep) / 2;
       for (let i = 0; i <= count; i += 1) {
-        map.medianPoint(run, start + i * 18, point);
-        plantDatePalm(point.x, point.z, { scale: rng.range(0.98, 1.14), claim: 0.9 });
+        map.medianPoint(run, start + i * avenueStep, point);
+        plantDatePalm(point.x, point.z, { scale: palmHeightVariant('median', rng.next()), claim: 0.9 });
       }
     }
     for (const run of map.sidewalkRuns) {
       if (run.name !== 'The Corniche') continue;
-      const phase = run.side < 0 ? 0 : 9;
-      for (let along = run.from + 4 + phase; along <= run.to - 4; along += 18) {
+      const phase = run.side < 0 ? 0 : avenueStep / 2;
+      for (let along = run.from + 4 + phase; along <= run.to - 4; along += avenueStep) {
         if (map.inSpan(run, along, 2)) continue;
         map.runPoint(run, along, 1.2, point);
-        plantDatePalm(point.x, point.z, { scale: rng.range(1.05, 1.28), claim: 0.9 });
+        plantDatePalm(point.x, point.z, { scale: palmHeightVariant('corniche', rng.next()), claim: 0.9 });
       }
     }
     // Lantern Row and the marina streets: palms along the kerbs too.
@@ -109,10 +112,10 @@ export function createPalmTrees(game, kit) {
       const district = run.district ? run.district.id : '';
       const marinaStreet = district === 'marina' && run.kind === 'street';
       if (!marinaStreet && run.name !== 'Lantern Row') continue;
-      for (let along = run.from + 6 + (run.side > 0 ? 12 : 0); along <= run.to - 4; along += 24) {
+      for (let along = run.from + 6 + (run.side > 0 ? kerbStep / 2 : 0); along <= run.to - 4; along += kerbStep) {
         if (map.inSpan(run, along, 3)) continue;
         map.runPoint(run, along, 1.1, point);
-        plantDatePalm(point.x, point.z, { scale: rng.range(0.8, 1.0), claim: 1.0 });
+        plantDatePalm(point.x, point.z, { scale: palmHeightVariant('kerb', rng.next()), claim: 1.0 });
       }
     }
     // Jasmine Heights streets: blossoming trees at the kerb.
@@ -264,7 +267,7 @@ export function createPalmTrees(game, kit) {
         const x = rng.range(cell.x0 + 2.2, cell.x1 - 2.2);
         const z = rng.range(cell.z0 + 2.2, cell.z1 - 2.2);
         if (!inGarden(x, z)) continue;
-        if (palms < 3 && plantDatePalm(x, z, { scale: rng.range(0.72, 0.98) })) palms += 1;
+        if (palms < 3 && plantDatePalm(x, z, { scale: palmHeightVariant('garden', rng.next()) })) palms += 1;
         else if (trees < 1 && plantFloweringTree(x, z, { color: rng.pick([0xf03c9c, 0xd8329a, 0xff7aa8, 0x9a6ae6]) })) trees += 1;
       }
       for (let i = 0; i < 5; i += 1) {
@@ -315,7 +318,7 @@ export function createPalmTrees(game, kit) {
       const r = rng.range(radius * 0.45, radius * 0.98);
       const x = oasis.x + Math.cos(a) * r;
       const z = oasis.z + Math.sin(a) * r;
-      if (plantDatePalm(x, z, { scale: rng.range(0.78, 1.28), pitch: rng.range(0, 0.12), claim: 2.6 })) planted += 1;
+      if (plantDatePalm(x, z, { scale: palmHeightVariant('grove', rng.next()), pitch: rng.range(0, 0.12), claim: 2.6 })) planted += 1;
     }
     for (let i = 0; i < 40; i += 1) {
       const a = rng.range(0, Math.PI * 2);

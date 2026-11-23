@@ -140,6 +140,8 @@ export function createCrimeWitnesses(ctx) {
       if (!mind || ped.alive === false || NO_CALL[mind.mode] || ped === incident.victim || mind.call) continue;
       const d = Math.hypot(ped.pos.x - incident.x, ped.pos.z - incident.z);
       if (d > radius) continue;
+      // Nobody dials with the culprit standing over them.
+      if (Math.hypot(ped.pos.x - ctx.player.x, ped.pos.z - ctx.player.z) < 10) continue;
       const willing = witnessPhonesPolice(mind.courage, mind.fear, d);
       if (willing <= 0) continue;
       const score = willing * (0.8 + 0.4 * rng.next());
@@ -270,7 +272,9 @@ export function createCrimeWitnesses(ctx) {
     const d = Math.sqrt(dx * dx + dz * dz);
     const character = p.character;
     if (p.onFoot && character) {
-      if (d < 5.5) return true;
+      if (d < 3) return true;
+      const closing = -(dx * character.vel.x + dz * character.vel.z) / Math.max(0.1, d);
+      if (d < 7 && closing > 1.5) return true;
       const intent = character.intent;
       if (intent && intent.aim && character.weaponIndex >= 0 && d < 20) {
         const off = Math.abs(wrapAngle(Math.atan2(dx, dz) - intent.aimYaw));

@@ -17,7 +17,7 @@ const FOR_SALE_SAND = 0xe9b44c;
  * Build game.safehouses.
  * @returns {{homes:Object[], owns(placeId:string):boolean, buy(placeId:string):boolean, rest(placeId:string):boolean,
  *   unlock(placeId:string):void, grantVehicle(specId:string, placeId?:string, options?:{color?:number}):boolean,
- *   update(dt:number):void, serialize():Object, deserialize(data:Object):void}}
+ *   update(dt:number):void, serialize():Object, deserialize(data:Object):void, reset():void}}
  */
 export function createSafehouses(game) {
   const homes = game.city.placesOfKind('safehouse').map((place) => {
@@ -36,7 +36,7 @@ export function createSafehouses(game) {
   });
   for (const home of homes) refreshMarker(home);
 
-  const safehouses = { homes, owns, buy, rest, unlock, grantVehicle, update, serialize, deserialize };
+  const safehouses = { homes, owns, buy, rest, unlock, grantVehicle, update, serialize, deserialize, reset: () => deserialize(null) };
 
   /** Door prompts on foot; parked cars appear as the player comes home and go when they leave. */
   function update() {

@@ -21,7 +21,7 @@ export function createGarageWorkshop(game, counter) {
       pose,
       full,
       prompt: full ? 'Haddad Motors: repairs, paint and upgrades' : 'Chroma Bay Respray: repairs and paint',
-      marker: game.markers.add({ kind: 'garage', owner: 'garages', pos: { x: pose.x, y: 0, z: pose.z }, edge: false, color: 0x6aa7ff, label: place.name }),
+      marker: game.markers.add({ kind: 'garage', owner: 'garages', pos: { x: place.x, y: 0, z: place.z }, edge: false, color: 0x6aa7ff, label: place.name }),
     };
   });
 

@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { createShapeBuilder, rgb } from './propShapes.js';
 import { createPropRecord, setRecordColor } from './propInstancing.js';
+import { signalLensColours } from './streetFurnitureRules.js';
 
 const POLE = rgb(0x2c2f34);
 const HOUSING = rgb(0x1d1f22);
@@ -19,12 +20,7 @@ const HEADS = [
 const LENS_SPACING = 0.34;
 const LENS_FORWARD = 0.17;
 
-/** Lit and dark colours of the red, amber and green lenses (linear, drawn without tone mapping). */
-const LENS_COLORS = {
-  red: { on: [1.0, 0.07, 0.04], off: [0.1, 0.012, 0.01] },
-  yellow: { on: [1.0, 0.52, 0.02], off: [0.1, 0.055, 0.006] },
-  green: { on: [0.08, 1.0, 0.42], off: [0.007, 0.075, 0.035] },
-};
+/** The lenses of a head, top to bottom (lit and dark colours come from the furniture rules). */
 const LENS_ORDER = ['red', 'yellow', 'green'];
 const UPDATE_INTERVAL = 0.2;
 
@@ -109,8 +105,7 @@ export function createStreetSignals(game, kit) {
       changed = true;
       for (let k = 0; k < approach.lenses.length; k += 1) {
         const lens = approach.lenses[k];
-        const colors = LENS_COLORS[lens.lensColor];
-        setRecordColor(lens, lens.lensColor === state ? colors.on : colors.off);
+        setRecordColor(lens, signalLensColours(lens.lensColor, state));
       }
     }
     return changed;

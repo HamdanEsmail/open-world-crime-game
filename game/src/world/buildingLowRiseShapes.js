@@ -5,14 +5,15 @@
 import { rectPoints, faceOf } from './buildingGeometryBuilder.js';
 import { windTower, roofDome, waterTanks, satelliteDishes, airConUnits, solarPanels, pergola, plantRoom, roofPlanters } from './rooftopDetails.js';
 import { hangWallSign, raiseRooftopSign } from './neonSigns.js';
-import { paletteColor } from './buildingShapes.js';
+import { paletteColor, mixHex, awning, canopyAlong, rollerDoors, skylightRoof, shrinkFromFace } from './buildingShapes.js';
+import { architectureForDistrict, storeysForHeight, frontDoorSideOf } from './districtArchitectureStyles.js';
 
 /** An Old Sarab souk house: two plaster volumes, shop arches and doors on the street, battlements. */
 export function raiseSouk(ctx, building) {
   const { x, z, w, d, h } = building;
   const rng = ctx.rng;
-  const tint = paletteColor('oldSarab', building);
-  const along = building.front === 'n' || building.front === 's';
+  const tint = paletteColor('oldsarab', 'plaster', building);
+  const along = frontDoorSideOf(building) === 'n' || frontDoorSideOf(building) === 's';
   const split = 0.55 + rng.next() * 0.2;
   const lowH = h >= 8 ? Math.max(4.5, h - 3.4) : h;
   const parts = along
@@ -24,7 +25,7 @@ export function raiseSouk(ctx, building) {
   }
   parts.forEach(([a0, a1, ph], i) => {
     const box = along ? [a0, z - d / 2, a1, z + d / 2] : [x - w / 2, a0, x + w / 2, a1];
-    oldTownBlock(ctx, box, ph, building.front, i === 0 ? tint : mixHex(tint, 0xfff4e0, 0.25));
+    oldTownBlock(ctx, box, ph, frontDoorSideOf(building), i === 0 ? tint : mixHex(tint, 0xfff4e0, 0.25));
   });
   const tall = parts[0][2] >= parts[1][2] ? parts[0] : parts[1];
   const box = along ? [tall[0], z - d / 2, tall[1], z + d / 2] : [x - w / 2, tall[0], x + w / 2, tall[1]];
@@ -36,7 +37,7 @@ export function raiseSouk(ctx, building) {
 export function raiseRiad(ctx, building) {
   const { x, z, w, d, h } = building;
   const rng = ctx.rng;
-  const tint = paletteColor('oldSarab', building, 3);
+  const tint = paletteColor('oldsarab', 'plaster', building, 3);
   const x0 = x - w / 2;
   const x1 = x + w / 2;
   const z0 = z - d / 2;
@@ -44,7 +45,7 @@ export function raiseRiad(ctx, building) {
   const wingX = Math.max(6, w * 0.28);
   const wingZ = Math.max(6, d * 0.28);
   const lower = Math.max(4.5, h - 3.4);
-  const frontLow = building.front;
+  const frontLow = frontDoorSideOf(building);
   const wings = {
     n: [x0, z0, x1, z0 + wingZ],
     s: [x0, z1 - wingZ, x1, z1],
@@ -53,7 +54,7 @@ export function raiseRiad(ctx, building) {
   };
   for (const side of ['n', 's', 'e', 'w']) {
     const wh = side === frontLow ? lower : h;
-    oldTownBlock(ctx, wings[side], wh, side === frontLow ? building.front : null, side === frontLow ? mixHex(tint, 0xfff4e0, 0.2) : tint);
+    oldTownBlock(ctx, wings[side], wh, side === frontLow ? frontDoorSideOf(building) : null, side === frontLow ? mixHex(tint, 0xfff4e0, 0.2) : tint);
   }
   // The courtyard: paving, an arcade's shade, a fountain and a tree.
   const b = ctx.solid;
@@ -81,8 +82,8 @@ export function raiseWarehouse(ctx, building) {
   const { x, z, w, d, h } = building;
   const rng = ctx.rng;
   const b = ctx.solid;
-  const wall = paletteColor('docksSteel', building);
-  const roof = mixHex(paletteColor('docksSteel', building, 3), 0xb8bcc0, 0.5);
+  const wall = paletteColor('docks', 'steel', building);
+  const roof = mixHex(paletteColor('docks', 'steel', building, 3), 0xb8bcc0, 0.5);
   const alongX = w >= d;
   const span = alongX ? d : w;
   const rise = Math.min(4, span * 0.1);
@@ -97,7 +98,6 @@ export function raiseWarehouse(ctx, building) {
   b.gableRoof(x0 - 0.4, z0 - 0.4, x1 + 0.4, z1 + 0.4, eave, rise, alongX, { endTile: 'corrugated', endTint: wall });
   // Roof lights and vents along the ridge, a yellow gutter line along the eaves.
   b.use('darkGlass', 0xb8d0d8);
-  const len = alongX ? w : d;
   for (let k = 0; k < 3; k += 1) {
     const t0 = 0.15 + k * 0.27;
     const t1 = t0 + 0.12;
@@ -117,13 +117,12 @@ export function raiseWarehouse(ctx, building) {
   // A company name on a long side.
   const sign = ctx.nextSign('docks');
   if (sign && rng.chance(0.6)) {
-    const side = alongX ? (building.front === 'n' ? 's' : 'n') : (building.front === 'e' ? 'w' : 'e');
+    const side = alongX ? (frontDoorSideOf(building) === 'n' ? 's' : 'n') : (frontDoorSideOf(building) === 'e' ? 'w' : 'e');
     const face = faceOf(x, z, w, d, side);
     const sw = Math.min(face.length * 0.5, 24);
     hangWallSign(b, face, sign, eave - sw / 7 - 1.2, sw, sw / 7, face.length / 2, 0.08);
   }
   ctx.beacon(x, h + 1.4, z, 0xffb030, 1.4, 0);
-  void len;
 }
 
 /** A cold store: white insulated panels, a dock canopy over its doors, chillers on the roof. */
@@ -132,15 +131,14 @@ export function raiseColdStore(ctx, building) {
   const rng = ctx.rng;
   const b = ctx.solid;
   const stripe = rng.pick([0x1f6f9a, 0x1ba39c, 0x3f6688]);
-  const front = faceOf(x, z, w, d, building.front);
   const setback = 3;
-  const inner = shrinkFromFace(x, z, w, d, building.front, setback);
+  const inner = shrinkFromFace(x, z, w, d, frontDoorSideOf(building), setback);
   b.use('coldPanels', 0xf6f7f5);
   b.box(inner.x0, 0, inner.z0, inner.x1, h - 1.6, inner.z1, { top: false });
   b.use('plain', stripe);
   b.box(inner.x0, h - 1.6, inner.z0, inner.x1, h, inner.z1, { top: 'roofGravel', topTint: 0xd8d6d0 });
   // The loading canopy spanning the setback, and the dock doors beneath it.
-  const dock = faceOf((inner.x0 + inner.x1) / 2, (inner.z0 + inner.z1) / 2, inner.x1 - inner.x0, inner.z1 - inner.z0, building.front);
+  const dock = faceOf((inner.x0 + inner.x1) / 2, (inner.z0 + inner.z1) / 2, inner.x1 - inner.x0, inner.z1 - inner.z0, frontDoorSideOf(building));
   b.use('metalPanel', 0xe8eaea);
   const cx0 = Math.min(dock.ax, dock.bx, dock.ax + dock.nx * setback, dock.bx + dock.nx * setback);
   const cx1 = Math.max(dock.ax, dock.bx, dock.ax + dock.nx * setback, dock.bx + dock.nx * setback);
@@ -164,7 +162,6 @@ export function raiseColdStore(ctx, building) {
     b.cylinder(px - 1.5, (inner.z0 + inner.z1) / 2, 1.1, h + 2.2, h + 2.5, 8);
     b.cylinder(px + 1.5, (inner.z0 + inner.z1) / 2, 1.1, h + 2.2, h + 2.5, 8);
   }
-  void front;
 }
 
 /** A workshop: a saw-tooth steel shed at the docks, a low roller-door garage in Southgate. */
@@ -175,7 +172,7 @@ export function raiseWorkshop(ctx, building) {
   }
   const { x, z, w, d, h } = building;
   const b = ctx.solid;
-  const wall = paletteColor('docksSteel', building, 1);
+  const wall = paletteColor('docks', 'steel', building, 1);
   const alongX = w >= d;
   const teeth = Math.max(3, Math.round((alongX ? w : d) / 14));
   const toothH = Math.min(3.5, h * 0.3);
@@ -217,7 +214,7 @@ export function raiseVilla(ctx, building) {
   const { x, z, w, d, h } = building;
   const rng = ctx.rng;
   const b = ctx.solid;
-  const white = paletteColor('villaWhite', building);
+  const white = paletteColor('jasmine', 'white', building);
   const alongX = w >= d;
   const mainShare = 0.55 + rng.next() * 0.15;
   const wingH = 3.6;
@@ -234,7 +231,7 @@ export function raiseVilla(ctx, building) {
   const mainH = Math.max(6.5, h);
   const terracotta = building.variant % 3 === 0;
   const wallTop = terracotta ? mainH - 2 : mainH;
-  villaBlock(b, mainBox, wallTop, building.front, white, terracotta);
+  villaBlock(b, mainBox, wallTop, frontDoorSideOf(building), white, terracotta);
   if (terracotta) {
     b.use('terracotta', rng.pick([0xffffff, 0xf4e0d0, 0xffeedd]));
     const [a0, c0, a1, c1] = mainBox;
@@ -243,13 +240,13 @@ export function raiseVilla(ctx, building) {
     villaParapet(b, mainBox, wallTop, white);
     solarPanels(b, mainBox[0] + 1.5, mainBox[1] + 1.5, Math.min(mainBox[2] - 1.5, mainBox[0] + 9), Math.min(mainBox[3] - 1.5, mainBox[1] + 6), wallTop - 0.9);
   }
-  villaBlock(b, wingBox, wingH, building.front, mixHex(white, 0xf0e6d4, 0.3), false);
+  villaBlock(b, wingBox, wingH, frontDoorSideOf(building), mixHex(white, 0xf0e6d4, 0.3), false);
   villaParapet(b, wingBox, wingH, white);
   const [w0, v0, w1, v1] = wingBox;
   pergola(ctx, w0 + 1, v0 + 1, Math.min(w1 - 1, w0 + 8), Math.min(v1 - 1, v0 + 7), wingH - 0.9, 2.5);
   roofPlanters(b, rng, w0 + 1, v1 - 2.2, w1 - 1, v1 - 1, wingH - 0.9);
   // Bougainvillea spilling down a corner of the street front.
-  const face = faceOf((mainBox[0] + mainBox[2]) / 2, (mainBox[1] + mainBox[3]) / 2, mainBox[2] - mainBox[0], mainBox[3] - mainBox[1], building.front);
+  const face = faceOf((mainBox[0] + mainBox[2]) / 2, (mainBox[1] + mainBox[3]) / 2, mainBox[2] - mainBox[0], mainBox[3] - mainBox[1], frontDoorSideOf(building));
   const at = rng.chance(0.5) ? 2.5 : face.length - 2.5;
   const bx = face.ax + face.tx * at + face.nx * 0.35;
   const bz = face.az + face.tz * at + face.nz * 0.35;
@@ -278,13 +275,13 @@ export function raiseRetail(ctx, building) {
   const { x, z, w, d, h } = building;
   const rng = ctx.rng;
   const b = ctx.solid;
-  const tint = paletteColor('southgate', building);
+  const tint = paletteColor('southgate', 'paint', building);
   const bodyH = Math.min(h, 4.5 + (h > 8 ? 3.4 : 0));
-  const inner = shrinkFromFace(x, z, w, d, building.front, 2.5);
+  const inner = shrinkFromFace(x, z, w, d, frontDoorSideOf(building), 2.5);
   b.use('concrete', tint);
-  b.box(inner.x0, 0, inner.z0, inner.x1, bodyH, inner.z1, { top: false, skip: building.front });
+  b.box(inner.x0, 0, inner.z0, inner.x1, bodyH, inner.z1, { top: false, skip: frontDoorSideOf(building) });
   skylightRoof(b, rng, inner.x0, inner.z0, inner.x1, inner.z1, bodyH);
-  const face = faceOf((inner.x0 + inner.x1) / 2, (inner.z0 + inner.z1) / 2, inner.x1 - inner.x0, inner.z1 - inner.z0, building.front);
+  const face = faceOf((inner.x0 + inner.x1) / 2, (inner.z0 + inner.z1) / 2, inner.x1 - inner.x0, inner.z1 - inner.z0, frontDoorSideOf(building));
   b.use('shopStrip', mixHex(tint, 0xffffff, 0.3));
   b.wall(face.ax, face.az, face.bx, face.bz, 0, 4.5);
   b.use('plasterBlank', tint);
@@ -304,12 +301,12 @@ export function raiseMotel(ctx, building) {
   const { x, z, w, d } = building;
   const rng = ctx.rng;
   const b = ctx.solid;
-  const tint = paletteColor('southgate', building, 2);
-  const inner = shrinkFromFace(x, z, w, d, building.front, 2.6);
+  const tint = paletteColor('southgate', 'paint', building, 2);
+  const inner = shrinkFromFace(x, z, w, d, frontDoorSideOf(building), 2.6);
   const top = 6.6;
   b.use('plasterBlank', tint);
-  b.box(inner.x0, 0, inner.z0, inner.x1, top, inner.z1, { top: 'roofGravel', topTint: 0xd8d2c4, skip: building.front });
-  const face = faceOf((inner.x0 + inner.x1) / 2, (inner.z0 + inner.z1) / 2, inner.x1 - inner.x0, inner.z1 - inner.z0, building.front);
+  b.box(inner.x0, 0, inner.z0, inner.x1, top, inner.z1, { top: 'roofGravel', topTint: 0xd8d2c4, skip: frontDoorSideOf(building) });
+  const face = faceOf((inner.x0 + inner.x1) / 2, (inner.z0 + inner.z1) / 2, inner.x1 - inner.x0, inner.z1 - inner.z0, frontDoorSideOf(building));
   b.use('motelDoors', mixHex(tint, 0xffffff, 0.4));
   b.wall(face.ax, face.az, face.bx, face.bz, 0, 3.2);
   b.wall(face.ax, face.az, face.bx, face.bz, 3.3, 6.5, { vBase: 3.3 });
@@ -407,7 +404,7 @@ function dressOldRoof(ctx, building, [x0, z0, x1, z1], height, tint) {
 function streetDoorsAndAwning(ctx, building, tint) {
   const { x, z, w, d } = building;
   const rng = ctx.rng;
-  const face = faceOf(x, z, w, d, building.front);
+  const face = faceOf(x, z, w, d, frontDoorSideOf(building));
   const repeats = Math.max(1, Math.round(face.length / 9));
   const bay = face.length / (repeats * 3);
   const cut = ctx.cutout;
@@ -418,7 +415,8 @@ function streetDoorsAndAwning(ctx, building, tint) {
     const half = bay * 0.36;
     const ax = face.ax + face.tx * (at - half) + face.nx * 0.05;
     const az = face.az + face.tz * (at - half) + face.nz * 0.05;
-    cut.use('doorArch', DOOR_COLORS[(building.variant + k * 3 + Math.floor(building.tint * 6)) % DOOR_COLORS.length]);
+    const doorColors = architectureForDistrict('oldsarab').doors;
+    cut.use('doorArch', doorColors[(building.variant + k * 3 + Math.floor(building.tint * 6)) % doorColors.length]);
     cut.wall(ax, az, ax + face.tx * half * 2, az + face.tz * half * 2, 0, 3.1, { fit: true });
   }
   if (rng.chance(0.7)) {
@@ -427,42 +425,6 @@ function streetDoorsAndAwning(ctx, building, tint) {
     const end = face.length * (0.6 + rng.next() * 0.3);
     awning(cut, face, start, end, 3.5, 1.7, color);
   }
-  void tint;
-}
-
-/** A sloped striped awning from `start` to `end` metres along a face, hung at `y`. */
-function awning(cut, face, start, end, y, reach, color) {
-  cut.use('awningStripes', color);
-  const ax = face.ax + face.tx * start + face.nx * 0.05;
-  const az = face.az + face.tz * start + face.nz * 0.05;
-  const bx = face.ax + face.tx * end + face.nx * 0.05;
-  const bz = face.az + face.tz * end + face.nz * 0.05;
-  const len = end - start;
-  cut.quad([ax + face.nx * reach, y - 0.7, az + face.nz * reach], [bx + face.nx * reach, y - 0.7, bz + face.nz * reach], [bx, y, bz], [ax, y, az], 0, 0, len / 2.4, 0.999);
-}
-
-/** A flat canopy along a face (shop rows): a thin slab with a coloured fascia. */
-function canopyAlong(b, face, y, reach, color) {
-  const x0 = Math.min(face.ax, face.bx, face.ax + face.nx * reach, face.bx + face.nx * reach);
-  const x1 = Math.max(face.ax, face.bx, face.ax + face.nx * reach, face.bx + face.nx * reach);
-  const z0 = Math.min(face.az, face.bz, face.az + face.nz * reach, face.bz + face.nz * reach);
-  const z1 = Math.max(face.az, face.bz, face.az + face.nz * reach, face.bz + face.nz * reach);
-  b.use('plain', color);
-  b.slab(x0, z0, x1, z1, y, 0.45);
-}
-
-/** Roller doors along a building's front, `width` by `height` metres each. */
-function rollerDoors(ctx, building, width, height, tint) {
-  const b = ctx.solid;
-  const face = faceOf(building.x, building.z, building.w, building.d, building.front);
-  const count = Math.max(1, Math.floor(face.length / (width * 2.2)));
-  b.use('rollerDoor', tint);
-  for (let i = 0; i < count; i += 1) {
-    const at = face.length * (i + 0.5) / count;
-    const ax = face.ax + face.tx * (at - width / 2) + face.nx * 0.06;
-    const az = face.az + face.tz * (at - width / 2) + face.nz * 0.06;
-    b.wall(ax, az, ax + face.tx * width, az + face.tz * width, 0, height, { fit: true });
-  }
 }
 
 /** A Southgate garage workshop: block walls, roller doors, a painted band and a flat roof. */
@@ -470,12 +432,12 @@ function raiseSouthgateWorkshop(ctx, building) {
   const { x, z, w, d, h } = building;
   const rng = ctx.rng;
   const b = ctx.solid;
-  const tint = paletteColor('southgate', building, 1);
+  const tint = paletteColor('southgate', 'paint', building, 1);
   const top = Math.min(h, 6.5);
   b.use('concrete', tint);
   b.box(x - w / 2, 0, z - d / 2, x + w / 2, top, z + d / 2, { top: false });
   skylightRoof(b, rng, x - w / 2, z - d / 2, x + w / 2, z + d / 2, top);
-  const face = faceOf(x, z, w, d, building.front);
+  const face = faceOf(x, z, w, d, frontDoorSideOf(building));
   b.use('plain', rng.pick([0xc0392b, 0x2f6fa8, 0x1ba39c, 0xe9b44c]));
   b.wall(face.ax + face.nx * 0.05, face.az + face.nz * 0.05, face.bx + face.nx * 0.05, face.bz + face.nz * 0.05, top - 1.2, top - 0.4);
   rollerDoors(ctx, building, 4, 4.2, rng.pick([0xdfe2e4, 0x9cc4bc, 0xe8d4a0]));
@@ -526,7 +488,7 @@ function flatsBlock(ctx, building, balconies) {
   const { x, z, w, d, h } = building;
   const rng = ctx.rng;
   const b = ctx.solid;
-  const tint = paletteColor('wadiRender', building);
+  const tint = paletteColor('wadi', 'render', building);
   const x0 = x - w / 2;
   const x1 = x + w / 2;
   const z0 = z - d / 2;
@@ -534,18 +496,18 @@ function flatsBlock(ctx, building, balconies) {
   const shopH = 4.5;
   const top = h - 1;
   const deep = balconies ? 1.2 : 0;
-  const frontAxisZ = building.front === 'n' || building.front === 's';
+  const frontAxisZ = frontDoorSideOf(building) === 'n' || frontDoorSideOf(building) === 's';
   for (const side of ['n', 's', 'e', 'w']) {
     const balconySide = balconies && ((frontAxisZ && (side === 'n' || side === 's')) || (!frontAxisZ && (side === 'e' || side === 'w')));
     const f = faceOf(x, z, w - (balconySide && !frontAxisZ ? 2 * deep : 0), d - (balconySide && frontAxisZ ? 2 * deep : 0), side);
-    b.use(side === building.front ? 'shopStrip' : 'flatsWindows', side === building.front ? mixHex(tint, 0xffffff, 0.35) : tint);
-    b.wall(f.ax, f.az, f.bx, f.bz, 0, shopH, { vBase: side === building.front ? 0 : -1.9 });
+    b.use(side === frontDoorSideOf(building) ? 'shopStrip' : 'flatsWindows', side === frontDoorSideOf(building) ? mixHex(tint, 0xffffff, 0.35) : tint);
+    b.wall(f.ax, f.az, f.bx, f.bz, 0, shopH, { vBase: side === frontDoorSideOf(building) ? 0 : -1.9 });
     b.use(balconySide ? 'flatsBalconies' : 'flatsWindows', tint);
     b.wall(f.ax, f.az, f.bx, f.bz, shopH, top, { vBase: shopH });
     b.use('plain', mixHex(tint, 0xffffff, 0.5));
     b.wall(f.ax, f.az, f.bx, f.bz, top, h);
     if (balconySide) {
-      const storeys = Math.floor((top - shopH) / 3.2);
+      const storeys = storeysForHeight(top - shopH, 3.2);
       for (let k = 1; k <= storeys; k += 1) {
         const y = shopH + k * 3.2 - 0.2;
         const sx0 = Math.min(f.ax, f.bx, f.ax + f.nx * deep, f.bx + f.nx * deep);
@@ -573,48 +535,4 @@ function flatsBlock(ctx, building, balconies) {
   satelliteDishes(b, rng, x0 + 2, z1 - 5, x1 - 2, z1 - 2, roof, 1 + rng.int(0, 3));
   airConUnits(b, rng, x0 + 1.5, z + 2, x1 - 1.5, z1 - 2, roof, 2 + rng.int(0, 3));
   if (rng.chance(0.3) && w > 20) solarPanels(b, x - 6, z - 3, x + 6, z + 3, roof);
-  void x1;
 }
-
-/** A sun-bleached membrane roof with rows of raised skylights, for the big flat sheds. */
-function skylightRoof(b, rng, x0, z0, x1, z1, y) {
-  b.use('coldPanels', rng.pick([0xf4f2ec, 0xe8e4da, 0xdcd8cc, 0xf0e6d2]));
-  b.cap(rectPoints((x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0), y + 0.02, true);
-  b.use('darkGlass', 0xc8dce4);
-  const alongX = x1 - x0 >= z1 - z0;
-  const rows = Math.max(1, Math.floor((alongX ? z1 - z0 : x1 - x0) / 9));
-  for (let r = 0; r < rows; r += 1) {
-    const t = (r + 0.5) / rows;
-    const length = (alongX ? x1 - x0 : z1 - z0) * 0.7;
-    if (alongX) {
-      const zc = z0 + (z1 - z0) * t;
-      b.box((x0 + x1) / 2 - length / 2, y, zc - 0.9, (x0 + x1) / 2 + length / 2, y + 0.5, zc + 0.9);
-    } else {
-      const xc = x0 + (x1 - x0) * t;
-      b.box(xc - 0.9, y, (z0 + z1) / 2 - length / 2, xc + 0.9, y + 0.5, (z0 + z1) / 2 + length / 2);
-    }
-  }
-}
-
-/** The rectangle of a footprint with `setback` metres shaved off its `side`. */
-function shrinkFromFace(x, z, w, d, side, setback) {
-  let x0 = x - w / 2;
-  let x1 = x + w / 2;
-  let z0 = z - d / 2;
-  let z1 = z + d / 2;
-  if (side === 'n') z0 += setback;
-  else if (side === 's') z1 -= setback;
-  else if (side === 'e') x1 -= setback;
-  else x0 += setback;
-  return { x0, x1, z0, z1 };
-}
-
-function mixHex(a, b, t) {
-  const r = Math.round(((a >> 16) & 255) * (1 - t) + ((b >> 16) & 255) * t);
-  const g = Math.round(((a >> 8) & 255) * (1 - t) + ((b >> 8) & 255) * t);
-  const bl = Math.round((a & 255) * (1 - t) + (b & 255) * t);
-  return (r << 16) | (g << 8) | bl;
-}
-
-/** Old Sarab's door colours: teal, saffron, blue, oxblood, green, coral. */
-const DOOR_COLORS = [0x1ba39c, 0xe9a21a, 0x2f6fa8, 0x8a3a2a, 0x2c8a6e, 0xd0573a];

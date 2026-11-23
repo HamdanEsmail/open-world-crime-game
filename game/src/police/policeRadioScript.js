@@ -62,7 +62,7 @@ export const RADIO_LINES = {
   escaped: [
     'D|All units stand down. Suspect is gone. Somebody explain that to the Captain.',
     'D|Search is called off. Suspect has slipped the net {inDistrict}.',
-    'U|{unit}, nothing out here but sand and tyre marks. Calling it.',
+    'U|{unit}, nothing {on} but tyre marks. Calling it.',
     'D|Code four, units back to patrol. Write it up as a ghost.',
     'D|Stand down. File the paperwork, and somebody find out who taught him to drive like that.',
     'U|{unit}, he is gone. Three cars and a helicopter, and he is gone.',
@@ -218,11 +218,3 @@ export const RADIO_PRIORITY = {
   switchCar: 3, stolePolice: 4, onFootNow: 3, officerDown: 4, smoking: 2, burning: 3, onRims: 3,
   update: 1, updateOnFoot: 1, redLight: 2, speeding: 1, shotsFired: 2, unitWrecked: 2, arrest: 5, death: 5,
 };
-
-/** Colour words the dispatcher uses for a car, with the paint each one stands for. */
-export const COLOUR_WORDS = [
-  ['white', 0xf2f2f2], ['silver', 0xb9bdc3], ['grey', 0x6e7279], ['black', 0x1c1e22], ['red', 0xc4262a],
-  ['coral', 0xe4572e], ['orange', 0xf08a24], ['gold', 0xd6a732], ['yellow', 0xf1d33b], ['green', 0x2f8a3f],
-  ['lime', 0x9ccc3a], ['teal', 0x1ba39c], ['blue', 0x2f6bd8], ['navy', 0x1b2a4e], ['purple', 0x6c3fa0],
-  ['maroon', 0x6d1f2b], ['brown', 0x7a5232], ['sand-coloured', 0xd8c39a], ['pink', 0xe98aa8],
-];

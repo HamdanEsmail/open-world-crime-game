@@ -326,6 +326,25 @@ function drawGlyph(ctx, glyph) {
     ctx.lineTo(4, 6);
     ctx.closePath();
     ctx.fill();
+  } else if (glyph === 'rotor') {
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(-6.4, -4.6);
+    ctx.lineTo(6.4, -4.6);
+    ctx.moveTo(0, -4.6);
+    ctx.lineTo(0, -1.8);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(-0.6, 1.6, 4.2, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(2.8, 0.8, 4, 1.6);
+  } else if (glyph === 'barrier') {
+    ctx.fillRect(-6.4, -3, 12.8, 4.4);
+    ctx.fillRect(-5.4, 1.4, 1.8, 4.4);
+    ctx.fillRect(3.6, 1.4, 1.8, 4.4);
+    ctx.fillStyle = 'rgba(10,18,28,0.9)';
+    ctx.fillRect(-3.2, -3, 2.2, 4.4);
+    ctx.fillRect(1.6, -3, 2.2, 4.4);
   } else if (glyph === 'skull') {
     ctx.beginPath();
     ctx.arc(0, -1, 5.4, 0, Math.PI * 2);
@@ -359,12 +378,14 @@ export const BLIP_STYLES = {
   contact: { shape: 'badge', glyph: 'letter', color: '#e9b44c', useMarkerColor: true, label: 'Crew contact' },
   shop: { shape: 'badge', glyph: 'cup', color: '#f39c4a', label: 'Shop' },
   garage: { shape: 'badge', glyph: 'wrench', color: '#6aa7ff', label: 'Garage / respray' },
-  safehouse: { shape: 'badge', glyph: 'house', color: '#3fd07f', label: 'Safehouse' },
+  safehouse: { shape: 'badge', glyph: 'house', color: '#3fd07f', useMarkerColor: true, label: 'Safehouse' },
   police: { shape: 'dot', color: '#3d7bff', label: 'PSPD unit' },
   enemy: { shape: 'dot', color: '#ff3b3b', label: 'Hostile' },
   friend: { shape: 'dot', color: '#35d3c0', label: 'Crew' },
   race: { shape: 'badge', glyph: 'flag', color: '#d78bff', label: 'Race' },
-  activity: { shape: 'badge', glyph: 'diamond', color: '#1ba39c', label: 'Side job' },
+  activity: { shape: 'badge', glyph: 'diamond', color: '#1ba39c', useMarkerColor: true, label: 'Side job' },
+  helicopter: { shape: 'badge', glyph: 'rotor', color: '#4d86ff', label: 'PSPD helicopter' },
+  roadblock: { shape: 'badge', glyph: 'barrier', color: '#4d86ff', label: 'Roadblock' },
   pickup: { shape: 'badge', glyph: 'plus', color: '#4ee08a', label: 'Pickup' },
   vehicle: { shape: 'badge', glyph: 'car', color: '#9fd0ff', useMarkerColor: true, label: 'Vehicle' },
   hospital: { shape: 'badge', glyph: 'cross', color: '#ff5a5a', label: 'Hospital' },
@@ -381,7 +402,9 @@ export const BLIP_STYLES = {
   collectible: { shape: 'badge', glyph: 'falcon', color: '#ffd700', label: 'Golden falcon' },
 };
 
-/** City place kinds the maps show as standing icons (collectibles stay hidden: they are a hunt). */
-export const PLACE_BLIP_KINDS = new Set([
-  'safehouse', 'gunShop', 'garage', 'food', 'hospital', 'policeStation', 'taxiDepot', 'courierDepot', 'exportDock', 'raceStart', 'landmarkDoor',
-]);
+/**
+ * City place kinds the maps draw themselves because no system puts a marker on them. Safehouses,
+ * shops, garages, food stands, depots, the export crane and race starts come from game.markers,
+ * which carry their state (for sale, colour, hidden during a race); collectibles stay a hunt.
+ */
+export const PLACE_BLIP_KINDS = new Set(['hospital', 'policeStation', 'landmarkDoor']);

@@ -26,9 +26,10 @@ export function createVehicleExports(game, activities) {
   let deliverPrompt = '';
   let deliverFor = null;
   let routeMarker = null;
+  let announcedFor = null;
   generateList();
   if (dock) {
-    game.markers.add({ kind: 'activity', icon: 'exportDock', owner: 'exportDock', pos: { x: bay.x, y: 0, z: bay.z }, edge: false, color: EXPORT_TEAL, label: 'Pier 9 Export Crane' });
+    game.markers.add({ kind: 'activity', icon: 'exportDock', owner: 'exportDock', pos: { x: dock.x, y: 0, z: dock.z }, edge: false, color: EXPORT_TEAL, label: 'Pier 9 Export Crane' });
   }
 
   const module = {
@@ -169,6 +170,8 @@ export function createVehicleExports(game, activities) {
   game.events.on('player:enteredVehicle', (event) => {
     const vehicle = event.vehicle;
     if (!vehicle || !dock || !isWanted(vehicle.spec.id) || vehicle.tags.owned || vehicle.tags.exported) return;
+    if (vehicle === announcedFor && routeMarker) return;
+    announcedFor = vehicle;
     activities.toast(`Pier 9 wants this ${vehicle.spec.name}: up to ${activities.money(exportPriceForVehicle(vehicle.spec, 1))}`, 'cash');
     clearRouteMarker();
     const quiet = activities.running || (game.missions && game.missions.active) || game.markers.routeTarget();

@@ -2,6 +2,7 @@
 // (pure pursuit), so a car settles onto its lane and rounds a corner without weaving; the pedals
 // follow the Intelligent Driver Model, so it glides up to a queue or a red light, keeps a gap that
 // grows with speed, and pulls away smoothly when the way clears.
+import { followingGapAtSpeed } from './trafficRules.js';
 
 const GRAVITY = 9.81;
 /** How fast a driver may press harder on the throttle (m/s^3): no lurching away. */
@@ -51,16 +52,15 @@ export function idmAcceleration(state, speed, desiredSpeed) {
   } else {
     acc = -Math.min(b * 1.6, (v - v0) * 1.1 + 0.4);
   }
-  const twoRootAB = 2 * Math.sqrt(a * b);
   let interaction = 0;
   if (state.obstacleGap < 90) {
-    const closing = v - state.obstacleSpeed;
-    const wanted = state.minGap + Math.max(0, v * state.headway + (v * closing) / twoRootAB);
+    const wanted = followingGapAtSpeed(v, v - state.obstacleSpeed, state.minGap, state.headway, a, b);
     const ratio = wanted / Math.max(0.25, state.obstacleGap);
     interaction = ratio * ratio;
   }
   if (state.stopGap < 90) {
-    const wanted = 0.5 + Math.max(0, v * 0.6 + (v * v) / twoRootAB);
+    // A stop line is a standing obstacle with a short standstill gap and time gap.
+    const wanted = followingGapAtSpeed(v, v, 0.5, 0.6, a, b);
     const ratio = wanted / Math.max(0.25, state.stopGap + 0.3);
     if (ratio * ratio > interaction) interaction = ratio * ratio;
   }

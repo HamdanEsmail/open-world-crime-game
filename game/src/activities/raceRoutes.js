@@ -138,7 +138,7 @@ function wadiCircuitRally() {
       cp(-980, 1250, 16, { cornerWidth: 13 }),
       cpOn(wadiHome, 0.37, -8, 9),
       cpOn(wadiHome, 0.51, -8, 9),
-      cpOn(wadiHome, 0.97, 0, 16),
+      cpOn(wadiHome, 0.66, 0, 16),
     ],
   };
 }

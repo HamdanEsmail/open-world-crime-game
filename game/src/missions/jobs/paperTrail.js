@@ -24,6 +24,8 @@ export const job = {
 
 /** How close and how far behind the carrier a tail may drive, in metres. */
 const TAIL = { min: 16, max: 90, grace: 5 };
+/** The carrier's cruising speed through town, m/s (about 40 km/h). */
+const CRUISE = 11;
 /** Seconds the carrier stands at the Customs House while its guard checks the seals. */
 const CUSTOMS_STOP = 32;
 /** Seconds at the rear bumper it takes to fix the tracker. */
@@ -35,20 +37,26 @@ async function runPaperTrail(m) {
   try {
     m.setTime(9.6);
     m.setTraffic(1);
-    if (m.resumeFrom !== 'tail') {
-      await openAtMinasStall(m, scene);
-      await takePositionAtTheSpire(m, scene);
-      m.checkpoint('tail');
-      await watchVaneSeeItOff(m, scene);
+    if (m.resumeFrom === 'customs') {
+      resumeAtTheCustomsHouse(m, scene);
+      watchForSpooking(m, scene);
     } else {
-      resumeBehindTheCarrier(m, scene);
+      if (m.resumeFrom === 'tail') {
+        resumeBehindTheCarrier(m, scene);
+      } else {
+        await openAtMinasStall(m, scene);
+        await takePositionAtTheSpire(m, scene);
+        m.checkpoint('tail');
+        await watchVaneSeeItOff(m, scene);
+      }
+      watchForSpooking(m, scene);
+      await tailLeg(m, scene, [scene.pearlCorner, scene.sundialStop], 'Tail the carrier down Pearl Street to the Sundial');
+      await holdBack(m, scene, 7, 'Hold back while it idles by the Sundial', [['mina', 'It always stops here. Counting tourists, or tails.']]);
+      await tailLeg(m, scene, [scene.karakStop], 'Tail it east along Souk Street into Al Wadi');
+      await teaBreak(m, scene);
+      await tailLeg(m, scene, [scene.craneCorner, scene.customsStop], 'Tail it north to the Mina Customs House');
+      m.checkpoint('customs');
     }
-    watchForSpooking(m, scene);
-    await tailLeg(m, scene, [scene.pearlCorner, scene.sundialStop], 'Tail the carrier down Pearl Street to the Sundial');
-    await holdBack(m, scene, 7, 'Hold back while it idles by the Sundial', [['mina', 'It always stops here. Counting tourists, or tails.']]);
-    await tailLeg(m, scene, [scene.karakStop], 'Tail it east along Souk Street into Al Wadi');
-    await teaBreak(m, scene);
-    await tailLeg(m, scene, [scene.craneCorner, scene.customsStop], 'Tail it north to the Mina Customs House');
     await plantTheTracker(m, scene);
     await followToThePier(m, scene);
     await slipAway(m, scene);
@@ -90,7 +98,7 @@ async function openAtMinasStall(m, scene) {
 
 /** Park a safe distance behind the carrier at the Spire's kerb, where the lobby can't see you. */
 async function takePositionAtTheSpire(m, scene) {
-  spawnTheCarrier(m, scene);
+  spawnTheCarrier(m, scene, scene.carrierSpot);
   m.objective('Park behind the bullion carrier at the Vane Spire');
   await m.reach(scene.waitSpot, 10, { inVehicle: true, stopped: true, label: 'Wait here' });
   chatter(m, [['mina', 'Good. Engine running, eyes on the truck. Look bored.']]);
@@ -118,8 +126,21 @@ async function watchVaneSeeItOff(m, scene) {
 function resumeBehindTheCarrier(m, scene) {
   scene.sandpiper = m.spawnVehicle('dromo_sandpiper', { x: scene.waitSpot.x, z: scene.waitSpot.z, heading: scene.waitSpot.heading, color: 0xf4f1e8 });
   m.playerInto(scene.sandpiper);
-  spawnTheCarrier(m, scene);
+  spawnTheCarrier(m, scene, scene.carrierSpot);
   chatter(m, [['mina', 'Here it comes again. Gently this time.']]);
+}
+
+/** A retry at the Customs House: the carrier just pulled up, Zayd parked well back along the avenue. */
+function resumeAtTheCustomsHouse(m, scene) {
+  const stop = scene.customsStop;
+  spawnTheCarrier(m, scene, stop);
+  scene.guard = m.spawnPerson({ archetype: 'business', kind: 'target', faction: 'aurum', name: 'Aurum guard', x: stop.x, z: stop.z, heading: stop.heading });
+  m.seat(scene.carrier, scene.guard, 1);
+  const back = aheadOf({ pos: stop, heading: stop.heading }, -48);
+  const spot = laneSpot(m, back.x, back.z, { facing: stop.heading });
+  scene.sandpiper = m.spawnVehicle('dromo_sandpiper', { x: spot.x, z: spot.z, heading: spot.heading, color: 0xf4f1e8 });
+  m.playerInto(scene.sandpiper);
+  chatter(m, [['mina', 'Customs House. The carrier is stopping. Stay back.']]);
 }
 
 /**
@@ -128,10 +149,14 @@ function resumeBehindTheCarrier(m, scene) {
  */
 async function tailLeg(m, scene, points, text) {
   m.objective(text);
+  // The heavy truck rolls the last stretch slowly so it pulls up without overshooting (and reversing into its tail).
+  const stop = points[points.length - 1];
+  const legs = points.slice(0, -1).map((point) => ({ point, speed: CRUISE, stop: false }));
+  if (stop.lane) legs.push({ point: { x: stop.x - stop.lane.dirX * 40, z: stop.z - stop.lane.dirZ * 40 }, speed: CRUISE, stop: false });
+  legs.push({ point: stop, speed: CRUISE * 0.55, stop: true });
   const drive = (async () => {
-    for (let i = 0; i < points.length; i += 1) {
-      const last = i === points.length - 1;
-      await m.driveTo(scene.carrier, points[i].x, points[i].z, { speed: 13, stop: last, careful: true, obeySignals: true });
+    for (const leg of legs) {
+      await m.driveTo(scene.carrier, leg.point.x, leg.point.z, { speed: leg.speed, stop: leg.stop, careful: true, obeySignals: true });
     }
     return true;
   })();
@@ -147,7 +172,7 @@ async function holdBack(m, scene, seconds, text, lines) {
   m.objective(text);
   if (lines) chatter(m, lines);
   scene.tailing = true;
-  await m.any([m.seconds(seconds), m.tail(scene.carrier, { min: TAIL.min, max: TAIL.max + 20, grace: TAIL.grace, label: 'Bullion carrier' })]);
+  await m.any([m.seconds(seconds), m.tail(scene.carrier, { min: TAIL.min - 4, max: TAIL.max + 20, grace: TAIL.grace, label: 'Bullion carrier' })]);
   scene.tailing = false;
 }
 
@@ -175,7 +200,7 @@ async function teaBreak(m, scene) {
   await m.any([
     errand,
     m.seconds(26),
-    m.tail(carrier, { min: TAIL.min, max: TAIL.max + 20, grace: TAIL.grace, label: 'Bullion carrier' }),
+    m.tail(carrier, { min: TAIL.min - 4, max: TAIL.max + 20, grace: TAIL.grace, label: 'Bullion carrier' }),
   ]);
   scene.tailing = false;
   if (guard.vehicle !== carrier && !isDown(guard)) m.seat(carrier, guard, 1);
@@ -271,7 +296,11 @@ async function plantTheTracker(m, scene) {
 async function followToThePier(m, scene) {
   const carrier = scene.carrier;
   m.objective('Follow the carrier to its berth');
-  const leg = m.driveTo(carrier, scene.berth.x, scene.berth.z, { speed: 12, stop: true, careful: true, obeySignals: true });
+  const leg = (async () => {
+    await m.driveTo(carrier, scene.quayGate.x, scene.quayGate.z, { speed: CRUISE, stop: false, careful: true, obeySignals: true });
+    await m.driveTo(carrier, scene.berth.x, scene.berth.z, { speed: 5, stop: true, careful: true });
+  })();
+  leg.catch(() => {});
   const mark = m.marker(carrier, { label: 'Bullion carrier', kind: 'objective', color: 0xffd24a, route: true });
   let farFor = 0;
   const lost = m.failIf(() => {
@@ -431,9 +460,8 @@ function sideDoorOf(carrier, side) {
   return { x: carrier.pos.x + s * along - c * out * side, z: carrier.pos.z + c * along + s * out * side };
 }
 
-/** The Aurum carrier at the Spire's kerb with its driver aboard, engine running. */
-function spawnTheCarrier(m, scene) {
-  const spot = scene.carrierSpot;
+/** The Aurum carrier at a kerb with its driver aboard, engine running. */
+function spawnTheCarrier(m, scene, spot) {
   scene.carrier = m.spawnVehicle('aurum_bullion', { x: spot.x, z: spot.z, heading: spot.heading, color: 0x2b2f36 });
   const driver = m.spawnPerson({ archetype: 'business', kind: 'target', faction: 'aurum', name: 'Aurum driver', x: spot.x, z: spot.z, heading: spot.heading });
   m.seat(scene.carrier, driver, 0);
@@ -469,12 +497,13 @@ function surveyTheRoute(m) {
     waitSpot: kerbSpot(m, back.x, back.z, { facing: west }),
     sandpiperSpot: kerbSpot(m, contact.x + 14, contact.curbZ !== undefined ? contact.curbZ : contact.z + 5),
     pearlCorner: laneSpot(m, pearl.x + 16, pearl.z, { facing: west }),
-    sundialStop: kerbSpot(m, sundial.x - 30, soukStreetZ + 4, { facing: east }),
+    sundialStop: kerbSpot(m, sundial.x - 30, soukStreetZ + 4, { facing: east, shift: 0.25 }),
     karak,
-    karakStop: kerbSpot(m, karak.x, soukStreetZ + 4, { facing: east }),
+    karakStop: kerbSpot(m, karak.x, soukStreetZ + 4, { facing: east, shift: 0.25 }),
     craneCorner: laneSpot(m, crane.x - 16, crane.z, { facing: east }),
-    customsStop: kerbSpot(m, customs.x - (customs.w || 70) / 2 - 40, customs.z, { facing: north }),
+    customsStop: kerbSpot(m, customs.x - (customs.w || 70) / 2 - 40, customs.z, { facing: north, shift: 0.3 }),
     berth,
+    quayGate: laneSpot(m, berth.x - 25, exportDock.curbZ !== undefined ? exportDock.curbZ - 12 : exportDock.z - 16, { facing: east }),
     vantage: { x: vantageLane.x, z: vantageLane.z },
     clearOfDocks: laneSpot(m, berth.x - 120, berth.z + 330),
     carrier: null, driver: null, guard: null, sandpiper: null, tailing: false, spooked: false,

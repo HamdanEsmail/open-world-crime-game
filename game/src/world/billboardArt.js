@@ -2,30 +2,34 @@
 // a bold flat graphic with its name and slogan, made to read from a moving car and from a thumbnail.
 // Soda, cars, radio, flatbread, a gold vault, the grand hotel, couriers, respray, guns, the dunes...
 import * as THREE from 'three';
+import { BILLBOARD_BRANDS } from './streetFurnitureRules.js';
 
 const ATLAS = 1024;
 const AD_W = 512;
 const AD_H = 128;
 
-/** The brands, in atlas order. `painter` draws the graphic; name and slogan are lettered after it. */
-export const ADVERTS = [
-  { brand: 'SIROCCO SODA', slogan: 'Feel the hot wind.', bg: ['#ff8a1c', '#e4372e'], ink: '#fff4d6', painter: paintSodaBottle },
-  { brand: 'ORYX MOTORS', slogan: 'Built for the long road.', bg: ['#0e1b2a', '#1c3550'], ink: '#e9b44c', painter: paintOryxHorns },
-  { brand: 'DUNE FM 101.1', slogan: 'Turn it up, Port Sarab.', bg: ['#7a1fa2', '#e4572e'], ink: '#fff4d6', painter: paintRadioDunes },
-  { brand: 'SARAB GOLD 98.6', slogan: 'Golden oldies all night.', bg: ['#f2c14e', '#d9962b'], ink: '#2a1a08', painter: paintRecord },
-  { brand: 'ZAATAR & CO.', slogan: 'Fresh flatbread since sunrise.', bg: ['#fff1d0', '#f3dca8'], ink: '#2f5d2a', painter: paintFlatbread },
-  { brand: 'AURUM PRIVATE VAULTS', slogan: 'Your gold. Our silence.', bg: ['#111111', '#2a2418'], ink: '#e9b44c', painter: paintGoldBars },
-  { brand: 'MIRAGE GRAND HOTEL', slogan: 'Stay where the sky ends.', bg: ['#ff9e5e', '#7a3d8c'], ink: '#fff4d6', painter: paintHotelTower },
-  { brand: 'SWIFT CAMEL COURIERS', slogan: 'Over the dunes, on time.', bg: ['#ffd23f', '#f6a21e'], ink: '#3a2205', painter: paintRunningCamel },
-  { brand: 'CHROMA BAY RESPRAY', slogan: 'New colour. No questions.', bg: ['#1ba39c', '#14636a'], ink: '#ffffff', painter: paintRainbowCar },
-  { brand: 'BRASS & BARREL', slogan: "Protect what's yours.", bg: ['#5b1414', '#2a0a0a'], ink: '#e9b44c', painter: paintTarget },
-  { brand: 'VISIT THE AMBER DUNES', slogan: 'Get lost. Safely.', bg: ['#ffcf7a', '#f08a3c'], ink: '#4a1e05', painter: paintSunOverDunes },
-  { brand: 'VANE SPIRE RESIDENCES', slogan: 'Live above it all.', bg: ['#0e1b2a', '#243a66'], ink: '#fff4d6', painter: paintSpire },
-  { brand: 'HADDAD MOTORS', slogan: 'Uncle Faris fixes everything.', bg: ['#e4572e', '#a8321a'], ink: '#fff4d6', painter: paintWrench },
-  { brand: 'KHAMSIN SEASON', slogan: 'Lights on. Speed down. — PSPD', bg: ['#c88a4a', '#8a5a2e'], ink: '#fff4d6', painter: paintSandSwirl },
-  { brand: 'SAFFRON SKEWER', slogan: 'Grilled till dawn.', bg: ['#2b2420', '#3d2a1e'], ink: '#ffb347', painter: paintSkewer },
-  { brand: 'KARAK CORNER', slogan: 'Tea that talks back.', bg: ['#8a4b26', '#5e2e14'], ink: '#ffe8c0', painter: paintTeaGlass },
+/** How each brand of the furniture rules is painted, in the same order: ground, ink and graphic. */
+const ADVERT_LOOKS = [
+  { bg: ['#ff8a1c', '#e4372e'], ink: '#fff4d6', painter: paintSodaBottle },
+  { bg: ['#0e1b2a', '#1c3550'], ink: '#e9b44c', painter: paintOryxHorns },
+  { bg: ['#7a1fa2', '#e4572e'], ink: '#fff4d6', painter: paintRadioDunes },
+  { bg: ['#f2c14e', '#d9962b'], ink: '#2a1a08', painter: paintRecord },
+  { bg: ['#fff1d0', '#f3dca8'], ink: '#2f5d2a', painter: paintFlatbread },
+  { bg: ['#111111', '#2a2418'], ink: '#e9b44c', painter: paintGoldBars },
+  { bg: ['#ff9e5e', '#7a3d8c'], ink: '#fff4d6', painter: paintHotelTower },
+  { bg: ['#ffd23f', '#f6a21e'], ink: '#3a2205', painter: paintRunningCamel },
+  { bg: ['#1ba39c', '#14636a'], ink: '#ffffff', painter: paintRainbowCar },
+  { bg: ['#5b1414', '#2a0a0a'], ink: '#e9b44c', painter: paintTarget },
+  { bg: ['#ffcf7a', '#f08a3c'], ink: '#4a1e05', painter: paintSunOverDunes },
+  { bg: ['#0e1b2a', '#243a66'], ink: '#fff4d6', painter: paintSpire },
+  { bg: ['#e4572e', '#a8321a'], ink: '#fff4d6', painter: paintWrench },
+  { bg: ['#c88a4a', '#8a5a2e'], ink: '#fff4d6', painter: paintSandSwirl },
+  { bg: ['#2b2420', '#3d2a1e'], ink: '#ffb347', painter: paintSkewer },
+  { bg: ['#8a4b26', '#5e2e14'], ink: '#ffe8c0', painter: paintTeaGlass },
 ];
+
+/** The adverts in atlas order: brand and slogan from the rules, painted with their look. */
+export const ADVERTS = BILLBOARD_BRANDS.map(([brand, slogan], i) => ({ brand, slogan, ...ADVERT_LOOKS[i % ADVERT_LOOKS.length] }));
 
 /** Paint every advert. Returns { texture, slots: [[u, v, w, h]...] } (one UV rectangle per advert). */
 export function paintAdvertAtlas(renderer) {

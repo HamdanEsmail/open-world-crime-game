@@ -53,7 +53,7 @@ export function createTaxiFares(game, activities) {
   const bonusTimer = { label: 'Bonus', seconds: 0 };
   let shift = null;
   let depotCab = null;
-  const depotMarker = depot ? game.markers.add({ kind: 'activity', icon: 'taxiDepot', owner: 'taxiDepot', pos: { x: depotPose.x, y: 0, z: depotPose.z }, edge: false, color: TAXI_YELLOW, label: 'Sarab Cab Depot: taxi fares' }) : null;
+  const depotMarker = depot ? game.markers.add({ kind: 'activity', icon: 'taxiDepot', owner: 'taxiDepot', pos: { x: depot.x, y: 0, z: depot.z }, edge: false, color: TAXI_YELLOW, label: 'Sarab Cab Depot: taxi fares' }) : null;
 
   const module = {
     id: 'taxi',

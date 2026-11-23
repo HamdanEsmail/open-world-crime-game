@@ -3,6 +3,7 @@
 // glass, and after dusk lights a random share of windows (and every sign) so the skyline sparkles.
 // Two variants share one set of uniforms: solid walls, and cut-out lattices seen from both sides.
 import * as THREE from 'three';
+import { windowsLitAtNight, LIT_FLOOR, LIT_SPREAD } from './districtArchitectureStyles.js';
 
 /**
  * Make the solid and cut-out facade materials for `atlas` (from createFacadeAtlas).
@@ -28,7 +29,7 @@ export function createFacadeMaterials(atlas) {
   function applyLighting(game) {
     const sky = game.sky;
     const night = clamp01(sky?.night ?? 0);
-    uniforms.uLitShare.value = smoothstep(0.06, 0.65, night);
+    uniforms.uLitShare.value = windowsLitAtNight(night);
     uniforms.uWindowGlow.value = 0.9 * smoothstep(0.04, 0.5, night);
     uniforms.uSignGlow.value = 0.22 + 1.18 * smoothstep(0.05, 0.6, night);
     const colors = sky?.colors;
@@ -57,7 +58,12 @@ function makeFacadeMaterial(atlas, uniforms, cutout) {
     side: cutout ? THREE.DoubleSide : THREE.FrontSide,
   });
   material.name = cutout ? 'portSarabFacadeCutout' : 'portSarabFacade';
-  material.defines = { FACADE_TILE_COUNT: atlas.tileList.length, ATLAS_SIZE: `${atlas.size.toFixed(1)}` };
+  material.defines = {
+    FACADE_TILE_COUNT: atlas.tileList.length,
+    ATLAS_SIZE: atlas.size.toFixed(1),
+    LIT_FLOOR: LIT_FLOOR.toFixed(3),
+    LIT_SPREAD: LIT_SPREAD.toFixed(3),
+  };
   if (cutout) material.defines.FACADE_CUTOUT = '';
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
@@ -153,7 +159,8 @@ const FRAGMENT_LIGHTS_AND_GLASS = /* glsl */ `
   } else if (vTileInfo.w > 0.5) {
     vec2 facadeCell = floor(facadeRepeat * vTileInfo.xy);
     float facadePick = mix(facadeHash(facadeCell + vBuildingSeed * 97.0), facadeHash(vec2(vBuildingSeed * 53.0, facadeCell.y)), 0.5);
-    float facadeShare = uLitShare * (0.14 + 0.36 * fract(vBuildingSeed * 7.31));
+    // windowsLitAtNight(night, seed) of districtArchitectureStyles.js, per window.
+    float facadeShare = uLitShare * (LIT_FLOOR + LIT_SPREAD * fract(vBuildingSeed * 7.31));
     facadeLight = step(facadePick, facadeShare) * uWindowGlow;
     float facadeTone = facadeHash(facadeCell * 1.7 + 11.0);
     facadeLightColor *= (0.45 + 0.55 * fract(facadeTone * 13.7)) * (facadeTone > 0.84 ? vec3(0.62, 0.8, 1.05) : vec3(1.0, 0.72 + 0.2 * facadeTone, 0.42 + 0.3 * facadeTone));

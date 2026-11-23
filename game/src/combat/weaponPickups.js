@@ -12,6 +12,9 @@ const COLLECT_RADIUS_DRIVING = 2.4;
 const RESPAWN_SECONDS = 300;
 const DROPPED_LIFETIME = 120;
 const DRAW_DISTANCE = 170;
+/** A pickup shows on the minimap only within this distance of the player (and hides beyond BLIP_LEAVE). */
+const BLIP_RANGE = 120;
+const BLIP_LEAVE = 130;
 const HEALTH_AMOUNT = 50;
 const ARMOR_AMOUNT = 100;
 
@@ -72,10 +75,23 @@ export function createWeaponPickups(game, arsenal) {
     record.shape = shapeFor(kind, spec);
     record.ringColor = RING_COLORS[kind];
     record.label = labelFor(kind, spec);
-    if (record.fixed && game.markers && kind !== 'cash') {
-      record.marker = game.markers.add({ kind: 'pickup', pos: { x, y: record.y, z }, label: record.label, color: record.ringColor, edge: false });
-    }
+    hideBlip(record);
     return record;
+  }
+
+  /** A minimap blip for a pickup the player has come near (never pinned to the minimap's rim). */
+  function showBlip(record) {
+    if (record.marker || !game.markers) return;
+    record.blipPos.x = record.x;
+    record.blipPos.y = record.y;
+    record.blipPos.z = record.z;
+    record.marker = game.markers.add({ kind: 'pickup', pos: record.blipPos, label: record.label, color: record.ringColor, edge: false });
+  }
+
+  function hideBlip(record) {
+    if (!record.marker) return;
+    if (game.markers) game.markers.remove(record.marker);
+    record.marker = null;
   }
 
   /** Spin, bob and glow what is near the camera; collect what the player touches; respawn and expire. */
@@ -89,16 +105,31 @@ export function createWeaponPickups(game, arsenal) {
     const pz = canCollect ? player.pos.z : 0;
     const py = canCollect ? player.pos.y : 0;
     const reach = player && player.vehicle ? COLLECT_RADIUS_DRIVING : COLLECT_RADIUS;
+    // Blips only for what is near: shown inside BLIP_RANGE, hidden again a little further out.
+    const hasPlayer = !!character;
+    const bx = hasPlayer ? player.pos.x : 0;
+    const bz = hasPlayer ? player.pos.z : 0;
 
     for (let i = 0; i < pool.length; i += 1) {
       const record = pool[i];
       if (!record.active) {
+        if (record.marker) hideBlip(record);
         if (record.fixed && record.respawnAt > 0 && now >= record.respawnAt) respawn(record);
         continue;
       }
       if (now >= record.expiresAt) {
         record.active = false;
+        hideBlip(record);
         continue;
+      }
+      if (hasPlayer) {
+        const ex = record.x - bx;
+        const ez = record.z - bz;
+        const d2 = ex * ex + ez * ez;
+        if (!record.marker && d2 < BLIP_RANGE * BLIP_RANGE) showBlip(record);
+        else if (record.marker && d2 > BLIP_LEAVE * BLIP_LEAVE) hideBlip(record);
+      } else if (record.marker) {
+        hideBlip(record);
       }
       if (canCollect) {
         const dx = record.x - px;
@@ -151,13 +182,8 @@ export function createWeaponPickups(game, arsenal) {
       tone = 'cash';
     }
     record.active = false;
-    if (record.fixed) {
-      record.respawnAt = game.time.elapsed + RESPAWN_SECONDS;
-      if (record.marker && game.markers) {
-        game.markers.remove(record.marker);
-        record.marker = null;
-      }
-    }
+    hideBlip(record);
+    if (record.fixed) record.respawnAt = game.time.elapsed + RESPAWN_SECONDS;
     soundOptions.x = record.x;
     soundOptions.y = record.y + 0.8;
     soundOptions.z = record.z;
@@ -175,9 +201,6 @@ export function createWeaponPickups(game, arsenal) {
     record.active = true;
     record.respawnAt = 0;
     record.phase = Math.random() * Math.PI * 2;
-    if (game.markers && record.kind !== 'cash' && !record.marker) {
-      record.marker = game.markers.add({ kind: 'pickup', pos: { x: record.x, y: record.y, z: record.z }, label: record.label, color: record.ringColor, edge: false });
-    }
   }
 
   /** The fallen let go of their gun, and sometimes of some cash. */
@@ -209,7 +232,11 @@ export function createWeaponPickups(game, arsenal) {
 
   /** Take every dropped pickup off the street (a loaded game). */
   function clearDropped() {
-    for (let i = 0; i < pool.length; i += 1) if (!pool[i].fixed) pool[i].active = false;
+    for (let i = 0; i < pool.length; i += 1) {
+      if (pool[i].fixed) continue;
+      pool[i].active = false;
+      hideBlip(pool[i]);
+    }
   }
 
   function oldestDropped() {
@@ -267,7 +294,7 @@ export function createWeaponPickups(game, arsenal) {
 function makeRecord() {
   return {
     active: false, kind: '', weaponId: null, amount: 0, x: 0, y: 0, z: 0, fixed: false,
-    respawnAt: 0, expiresAt: 0, phase: 0, shape: 0, ringColor: 0xffffff, label: '', marker: null,
+    respawnAt: 0, expiresAt: 0, phase: 0, shape: 0, ringColor: 0xffffff, label: '', marker: null, blipPos: { x: 0, y: 0, z: 0 },
   };
 }
 

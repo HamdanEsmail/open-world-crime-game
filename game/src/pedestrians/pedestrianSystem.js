@@ -367,7 +367,8 @@ export function createPedestrianSystem(game) {
       if (mind.mode === 'cross') crossing += 1;
       if (mind.mode === 'wait') waiting += 1;
       if (mind.stuck) stuck += 1;
-      if (terrain && !ROAD_ALLOWED[mind.mode] && !followingAcross(mind) && mind.travelThen !== 'walkway' && inTrafficLane(ped)) inRoad += 1;
+      const passing = followingAcross(mind) || mind.travelThen === 'walkway' || (mind.mode === 'call' && (mind.callPhase === 'retreat' || mind.callPhase === 'kerb'));
+      if (terrain && !ROAD_ALLOWED[mind.mode] && !passing && inTrafficLane(ped)) inRoad += 1;
     }
     stats.alive = people.length - dead;
     stats.walking = walking;

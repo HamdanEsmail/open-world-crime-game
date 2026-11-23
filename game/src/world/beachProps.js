@@ -4,6 +4,7 @@
 // gulf. Parasols and loungers fly when a car tears along the beach; huts and towers stand firm.
 import { createShapeBuilder, rgb } from './propShapes.js';
 import { createPropRecord } from './propInstancing.js';
+import { beachParasolRowAt, propBreaksUnderImpact } from './streetFurnitureRules.js';
 
 const WHITE = rgb(0xf4f1ea);
 const CREAM = rgb(0xfff4d6);
@@ -64,13 +65,13 @@ export function createBeachProps(game, kit, printed) {
   /** Rows of parasols every 6.5 m (staggered row to row), each shading two loungers facing the sea. */
   function furnishClub(x0, x1, colours) {
     for (let row = 0; row < 4; row += 1) {
-      const z = top - 17 - row * 9;
+      const z = beachParasolRowAt(top, row);
       for (let px = x0 + (row % 2) * 3.25; px < x1; px += 6.5) {
         if (!drySand(px, z) || !drySand(px, z - 2)) continue;
         if (!map.claim(px, z, 1.5)) continue;
         const y = terrain ? terrain.heightAt(px, z) : 0;
         const parasol = createPropRecord({ kind: 'parasol', x: px, y, z, yaw: rng.range(0, 1), pitch: rng.range(-0.05, 0.05), color: colours[Math.round((px - x0) / 6.5 + row) % 2], footprint: 0.15 });
-        parasol.def = { fall: 'fly', height: 2.6, light: true };
+        parasol.def = { fall: propBreaksUnderImpact('parasol'), height: 2.6, light: true };
         kit.addCollider(parasol, { type: 'post', x: px, z, radius: 0.12, y0: y, y1: y + 2.6, kind: 'parasol', breakable: true });
         lists.parasol.push(parasol);
         for (const side of [-1, 1]) {
@@ -78,7 +79,7 @@ export function createBeachProps(game, kit, printed) {
           const lz = z - 0.4;
           const ly = terrain ? terrain.heightAt(lx, lz) : 0;
           const lounger = createPropRecord({ kind: 'lounger', x: lx, y: ly, z: lz, yaw: Math.PI, color: colours[0], footprint: 0.32 });
-          lounger.def = { fall: 'fly', height: 0.6, light: true };
+          lounger.def = { fall: propBreaksUnderImpact('lounger'), height: 0.6, light: true };
           kit.addCollider(lounger, { type: 'box', minX: lx - 0.33, maxX: lx + 0.33, minZ: lz - 0.95, maxZ: lz + 0.95, y0: ly, y1: ly + 0.55, kind: 'lounger', breakable: true });
           lists.lounger.push(lounger);
         }

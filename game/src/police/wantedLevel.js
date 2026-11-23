@@ -1,17 +1,14 @@
 // The five-star wanted level of Port Sarab: every crime the PSPD hears about adds heat, heat buys
 // stars, a pursuit runs while any unit has eyes on the player, and once they lose him a search timer
-// runs down until he is clear. Becomes game.wanted; crimeReporting decides which crimes reach it.
+// runs down until he is clear. Becomes game.wanted; crimeReporting decides which crimes reach it,
+// wantedLevelRules holds the numbers.
 import { createCrimeReporting } from './crimeReporting.js';
+import {
+  heatForCrime, starsForHeat, minimumStarsForCrime, searchSecondsForStars, starsAfterCutLoose, STAR_THRESHOLDS,
+} from './wantedLevelRules.js';
 
-/** Heat a crime adds once the PSPD learns of it. */
-export const CRIME_HEAT = {
-  carTheft: 10, carjacking: 14, policeCarTheft: 40, hitAndRun: 14, vehicleRamming: 4, assault: 8, gunfire: 10,
-  murder: 30, officerAssault: 28, officerKilled: 70, propertyDamage: 2, explosion: 35, robbery: 20, trespass: 6,
-};
 /** Heat at which each star is earned (index = stars). */
-export const STAR_HEAT = [0, 10, 32, 65, 115, 185];
-/** Crimes that never leave the player with fewer stars than this. */
-const MINIMUM_STARS = { officerKilled: 3 };
+const STAR_HEAT = STAR_THRESHOLDS;
 /** Heat lost per second with no stars, and above the current star while the police search. */
 const COOL_CLEAR = 0.5;
 const COOL_SEARCHING = 1.2;
@@ -63,6 +60,7 @@ export function createWantedLevel(game) {
     report,
     add,
     set,
+    lower,
     clear,
     lock,
     update,
@@ -75,19 +73,17 @@ export function createWantedLevel(game) {
   /**
    * The PSPD has learned of a crime at (x, z). Heat is added and stars earned; a crime the police saw
    * puts them on the player at once, one phoned in sends them to search where it happened.
-   * @param {string} crimeType  one of the keys of CRIME_HEAT
+   * @param {string} crimeType  one of the keys of CRIME_HEAT (wantedLevelRules)
    * @param {{victim?:Object, witnessed?:boolean, severity?:number, heat?:number}} [options]
    */
   function report(crimeType, x, z, options) {
     if (lockedLevel !== null) return;
     const o = options || {};
-    const base = typeof o.heat === 'number' ? o.heat : CRIME_HEAT[crimeType] !== undefined ? CRIME_HEAT[crimeType] : 5;
-    const amount = base * (typeof o.severity === 'number' ? o.severity : 1);
+    const amount = typeof o.heat === 'number' ? o.heat * (o.severity > 0 ? o.severity : 1) : heatForCrime(crimeType, o);
     wanted.points += amount;
-    let next = Math.max(wanted.level, starsForHeat(wanted.points));
-    if (MINIMUM_STARS[crimeType]) next = Math.max(next, MINIMUM_STARS[crimeType]);
-    next = Math.min(next, maxStars);
-    if (next > wanted.level) wanted.points = Math.max(wanted.points, STAR_HEAT[next]);
+    const earned = Math.min(maxStars, Math.max(starsForHeat(wanted.points), minimumStarsForCrime(crimeType)));
+    if (earned > 0) wanted.points = Math.max(wanted.points, STAR_HEAT[earned]);
+    const next = Math.max(wanted.level, Math.min(maxStars, starsAfterCutLoose(earned, cutLoose())));
     const px = Number.isFinite(x) ? x : playerX();
     const pz = Number.isFinite(z) ? z : playerZ();
     if (o.witnessed) {
@@ -110,10 +106,32 @@ export function createWantedLevel(game) {
     set(wanted.level + (stars || 1));
   }
 
-  /** Put the level at exactly `level`; the police know where the player is. */
+  /**
+   * Put the level at `level`. Raising it (a mission's alarm) also gives the police a fix on the player
+   * for a few seconds; a lower level is the same as lower() and gives them nothing.
+   */
   function set(level) {
     if (lockedLevel !== null) return;
-    setLevelNow(level);
+    const wantedLevel = Math.max(0, Math.min(maxStars, Math.round(level)));
+    if (wantedLevel < wanted.level) lower(wanted.level - wantedLevel);
+    else if (wantedLevel > wanted.level) setLevelNow(wantedLevel, true);
+  }
+
+  /**
+   * Drop the level by `stars` (a fine paid at a police desk, a respray, a safehouse rest): no new
+   * sight for the police, lastKnown untouched. Down to zero is clear().
+   */
+  function lower(stars = 1) {
+    if (lockedLevel !== null || wanted.level === 0) return;
+    const next = wanted.level - Math.max(1, Math.round(stars));
+    if (next <= 0) {
+      clear();
+      return;
+    }
+    const heatStars = cutLoose() ? Math.max(0, next - 1) : next;
+    wanted.points = STAR_HEAT[heatStars];
+    changeLevel(next);
+    refreshHeat();
   }
 
   /** Forget everything: no stars, no heat, no lock (on death, arrest and new games). */
@@ -141,7 +159,7 @@ export function createWantedLevel(game) {
       return;
     }
     lockedLevel = Math.max(0, Math.min(maxStars, Math.round(levelOrNull)));
-    setLevelNow(lockedLevel);
+    setLevelNow(lockedLevel, false);
   }
 
   /** Once a frame: who sees the player, the pursuit and the search timer, cooling heat. */
@@ -181,7 +199,7 @@ export function createWantedLevel(game) {
       // Until a unit reaches the area the search barely runs: nobody is looking yet.
       searchElapsed += dt * (searchersArrived() ? 1 : 0.5);
       area.radius = Math.min(240, 60 + searchElapsed * 5);
-      wanted.searchSeconds = evadePerStar * wanted.level;
+      wanted.searchSeconds = searchSecondsForStars(wanted.level, evadePerStar);
       wanted.searchProgress = Math.min(1, searchElapsed / Math.max(1, wanted.searchSeconds));
       if (wanted.points > STAR_HEAT[wanted.level]) wanted.points = Math.max(STAR_HEAT[wanted.level], wanted.points - COOL_SEARCHING * dt);
       if (wanted.searchProgress >= 1 && lockedLevel === null) escape();
@@ -232,24 +250,37 @@ export function createWantedLevel(game) {
     return false;
   }
 
-  function setLevelNow(level) {
-    const next = Math.max(0, Math.min(maxStars, Math.round(level)));
-    if (next === 0) {
+  /**
+   * Put the level at `level` (heat to match). With `raise` the police get a fix on the player, and a
+   * player cut loose by his handler gets one star more (the heat stays that of `level`, so the extra
+   * star is never counted twice).
+   */
+  function setLevelNow(level, raise) {
+    const asked = Math.max(0, Math.min(maxStars, Math.round(level)));
+    if (asked === 0) {
       const keepLock = lockedLevel;
       clear();
       lockedLevel = keepLock;
       return;
     }
-    wanted.points = Math.max(STAR_HEAT[next], Math.min(wanted.points, next < maxStars ? STAR_HEAT[next + 1] - 1 : wanted.points));
-    if (wanted.state === 'clear') {
-      wanted.state = 'pursuit';
-      wanted.pursuitTime = 0;
+    const next = raise ? Math.min(maxStars, starsAfterCutLoose(asked, cutLoose())) : asked;
+    wanted.points = Math.max(STAR_HEAT[asked], Math.min(wanted.points, asked < maxStars ? STAR_HEAT[asked + 1] - 1 : wanted.points));
+    if (raise || next > wanted.level) {
+      if (wanted.state === 'clear') {
+        wanted.state = 'pursuit';
+        wanted.pursuitTime = 0;
+      }
+      sightGrace = FIX_GRACE;
+      wanted.lastKnown.x = playerX();
+      wanted.lastKnown.z = playerZ();
     }
-    sightGrace = FIX_GRACE;
-    wanted.lastKnown.x = playerX();
-    wanted.lastKnown.z = playerZ();
     changeLevel(next);
     refreshHeat();
+  }
+
+  /** The handler has dropped the player (story flag): every level from one star up is one star worse. */
+  function cutLoose() {
+    return !!(game.story && game.story.flags && game.story.flags.cutLoose);
   }
 
   function changeLevel(next) {
@@ -296,7 +327,7 @@ export function createWantedLevel(game) {
   // A different car while nobody is watching: the police are now looking for the wrong one.
   game.events.on('player:enteredVehicle', ({ vehicle }) => {
     if (wanted.state !== 'search' || !vehicle || vehicle === lastSeenVehicle) return;
-    const total = evadePerStar * wanted.level;
+    const total = searchSecondsForStars(wanted.level, evadePerStar);
     searchElapsed += Math.max(0, total - searchElapsed) / 3;
     lastSeenVehicle = vehicle;
     game.events.emit('notify', { text: 'New wheels: the PSPD is looking for another car', kind: 'info' });
@@ -314,11 +345,4 @@ export function createWantedLevel(game) {
 
   wanted.crimes = createCrimeReporting(game, wanted);
   return wanted;
-}
-
-/** Stars a heat total is worth. */
-export function starsForHeat(points) {
-  let stars = 0;
-  for (let i = 1; i < STAR_HEAT.length; i += 1) if (points >= STAR_HEAT[i]) stars = i;
-  return stars;
 }

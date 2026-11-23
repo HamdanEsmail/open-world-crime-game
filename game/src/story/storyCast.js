@@ -3,17 +3,19 @@
 // subtitle colours and roles, a fixed hand-dressed look for each so they are known at a glance, and
 // the line queue that puts what they say on screen one line at a time, never two at once.
 
-/** Everyone who speaks in the story, by the id job scripts use as a speaker. */
+import { STORY_CAST_NAMES } from './coverMeterRules.js';
+
+/** Everyone who speaks in the story, by the id job scripts use as a speaker: names, subtitle colour, body. */
 export const STORY_CAST = {
-  zayd: { id: 'zayd', name: 'Zayd', fullName: 'Zayd "Dust" Karam', role: 'Getaway driver, undercover', color: '#e9b44c', kind: 'crew', faction: 'crew', archetype: 'player' },
-  dahan: { id: 'dahan', name: 'Dahan', fullName: 'Captain Rasha Dahan', role: 'PSPD Major Crimes, your handler', color: '#6fb7ff', kind: 'officer', faction: 'police', archetype: 'business' },
-  mina: { id: 'mina', name: 'Mina', fullName: 'Mina Okoro', role: 'The planner', color: '#2ec4b6', kind: 'crew', faction: 'crew', archetype: 'worker' },
-  faris: { id: 'faris', name: 'Faris', fullName: '"Uncle" Faris Haddad', role: 'The mechanic', color: '#f4a259', kind: 'crew', faction: 'crew', archetype: 'worker' },
-  tavi: { id: 'tavi', name: 'Tavi', fullName: 'Tavi Rourke', role: 'The inside man', color: '#ffb627', kind: 'crew', faction: 'crew', archetype: 'worker' },
-  vane: { id: 'vane', name: 'Vane', fullName: 'Idris Vane', role: 'Owner of the Vane Spire', color: '#fff4d6', kind: 'target', faction: 'vane', archetype: 'business' },
-  sayf: { id: 'sayf', name: 'Sayf', fullName: 'Sayf of the Dune Jackals', role: 'Leader of the Dune Jackals', color: '#ff6f59', kind: 'gang', faction: 'gang', archetype: 'gang' },
-  dispatch: { id: 'dispatch', name: 'PSPD Dispatch', fullName: 'PSPD Dispatch', role: 'Police radio', color: '#8fb3c9' },
-  radio: { id: 'radio', name: 'Sarab Gold 98.6', fullName: 'Sarab Gold 98.6', role: 'The news', color: '#e9dcc0' },
+  zayd: castMember('zayd', '#e9b44c', 'crew', 'crew', 'player'),
+  dahan: castMember('dahan', '#6fb7ff', 'officer', 'police', 'business'),
+  mina: castMember('mina', '#2ec4b6', 'crew', 'crew', 'worker'),
+  faris: castMember('faris', '#f4a259', 'crew', 'crew', 'worker'),
+  tavi: castMember('tavi', '#ffb627', 'crew', 'crew', 'worker'),
+  vane: castMember('vane', '#fff4d6', 'target', 'vane', 'business'),
+  sayf: castMember('sayf', '#ff6f59', 'gang', 'gang', 'gang'),
+  dispatch: castMember('dispatch', '#8fb3c9'),
+  radio: castMember('radio', '#e9dcc0'),
 };
 
 /**
@@ -141,6 +143,11 @@ export function createDialogueQueue(game) {
   }
 
   return dialogue;
+}
+
+/** One cast entry: the names and role from the story's cast list, plus how they look and speak. */
+function castMember(id, color, kind, faction, archetype) {
+  return { id, ...STORY_CAST_NAMES[id], color, kind, faction, archetype };
 }
 
 /** Hand-picked outfits, applied over each member's seeded random look. */

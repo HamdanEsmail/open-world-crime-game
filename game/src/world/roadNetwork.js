@@ -133,7 +133,8 @@ function buildNodesAndEdges(city, roads, nodeByKey) {
       if (edge.kind === 'boulevard') major = true;
     }
     const sharpCorner = node.edges.length === 2 && Math.abs(node.edges[0].dirX * node.edges[1].dirX + node.edges[0].dirZ * node.edges[1].dirZ) < 0.6;
-    node.trim = node.edges.length >= 3 || sharpCorner ? widest + 1.5 : 4;
+    // Lanes stop at the stop line, behind the zebra crossing: 5.6 m back from the crossing road's edge.
+    node.trim = node.edges.length >= 3 || sharpCorner ? widest + 5.6 : 4;
     node.signal = node.edges.length >= 3 && major && node.halfNS > 0;
     node.phase = ((node.x * 0.013 + node.z * 0.021) % 1 + 1) % 1 * SIGNAL_CYCLE;
   }

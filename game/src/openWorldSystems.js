@@ -40,7 +40,7 @@ import { createMenus } from './ui/menuDirector.js';
 const RAISING_STEPS = [
   ['Surveying the coast and the dunes', planTheCity],
   ['Lighting the gulf sky', startSkySeaAndWeather],
-  ['Paving the boulevards', (game) => { game.effects = createEffects(game); game.cityGround = createCityGround(game); }],
+  ['Paving the boulevards', paveTheGround],
   ['Raising the Spires', (game) => { game.cityArchitecture = createCityArchitecture(game); }],
   ['Planting palms along the Corniche', (game) => { game.cityFurniture = createCityFurniture(game); }],
   ['Tuning engines and radios', startVehiclesAndSound],
@@ -128,6 +128,15 @@ function startSkySeaAndWeather(game) {
   game.weather = createSandstormWeather(game);
   game.sky = createDayNightCycle(game);
   game.sea = createSeaWater(game);
+}
+
+/** Effects first (lamps register their glows with it), then the ground; the port cranes' legs become solid. */
+function paveTheGround(game) {
+  game.effects = createEffects(game);
+  game.cityGround = createCityGround(game);
+  for (const leg of game.cityGround.craneLegs || []) {
+    game.colliders.addPost({ x: leg.x, z: leg.z, radius: leg.radius, y0: 0, y1: 40, kind: 'crane' });
+  }
 }
 
 function startVehiclesAndSound(game) {

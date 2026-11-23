@@ -3,9 +3,8 @@
 // junctions and of other cars, and keeps only a spot the driver cannot see right now: outside the
 // camera's view or hidden behind buildings. A roadblock never appears before the player's eyes.
 import * as THREE from 'three';
+import { ROADBLOCK_NEAREST as MIN_AHEAD, ROADBLOCK_FARTHEST as MAX_AHEAD } from './policeHeavyResponseRules.js';
 
-const MIN_AHEAD = 250;
-const MAX_AHEAD = 400;
 const SPACING = 28;
 const END_CLEARANCE = 26;
 const MIN_LANE_LENGTH = 70;

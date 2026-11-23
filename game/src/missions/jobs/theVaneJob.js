@@ -90,6 +90,9 @@ function parkTheCrew(ctx) {
     ctx.crew[id] = person;
   }
   m.failIfDead(ctx.crew.mina, 'Mina is down. Without her the lift stays shut.');
+  // Zayd starts in cover with them, behind the van, looking up at the plaza.
+  if (m.resumeFrom !== 'lobby') m.teleportPlayer(vanSpot.x + 3.6, vanSpot.z + 4.4, Math.PI);
+  ctx.coverSpot = { x: vanSpot.x + 3.6, z: vanSpot.z + 4.4 };
   m.give('rifle', 240);
   m.give('pistol', 72);
   m.game.weapons?.dropPickup?.('armor', spire.curb.x - 6, spire.curb.z + 4, {});
@@ -102,10 +105,10 @@ async function openingInTheStorm(ctx) {
   const zayd = m.game.player.character;
   ctx.guards = postGuards(ctx, 4, { x: spire.x, z: spire.towerSouth + 24, radius: 15 });
   await m.cutscene([
-    { position: { x: spire.curb.x + 40, y: 1.6, z: spire.curb.z + 30 }, lookAt: { x: spire.x, y: 240, z: spire.z }, moveTo: { x: spire.curb.x + 30, y: 2.2, z: spire.curb.z + 22 }, seconds: 5, fov: 58, speaker: 'radio', text: 'Sarab Gold 98.6. The khamsin is here. Visibility: forty metres and falling.' },
+    { position: { x: spire.curb.x + 40, y: 1.6, z: spire.curb.z + 30 }, lookAt: { x: spire.x, y: 240, z: spire.z }, moveTo: { x: spire.curb.x + 30, y: 2.2, z: spire.curb.z + 22 }, seconds: 5, fov: 58, speaker: 'radio', text: 'Sarab Gold 98.6. The khamsin is here. Visibility: almost nothing.' },
     shotOf(m, { x: spire.x, z: spire.towerSouth + 20 }, { bearing: 0.4, distance: 30, height: 4, look: 1.4, seconds: 4, push: 6, speaker: 'tavi', text: "Vane's own guards. Not cops. Nobody here goes easy." }),
-    twoShot(m, mina, zayd, { seconds: 4, speaker: 'mina', text: 'Lift is in the lobby core. I need three minutes at the panel.' }),
-    overShoulder(m, faris, zayd, { seconds: 3.5, speaker: 'faris', text: "Three minutes. I've waited longer for a kettle." }),
+    twoShot(m, mina, zayd, { seconds: 4, speaker: 'mina', text: 'Lift is in the lobby core. Give me ninety seconds at the panel.' }),
+    overShoulder(m, faris, zayd, { seconds: 3.5, speaker: 'faris', text: "Ninety seconds. I've waited longer for a kettle." }),
     overShoulder(m, zayd, mina, { seconds: 3, speaker: 'zayd', text: 'Stay behind the van till I wave.' }),
     overShoulder(m, mina, zayd, { seconds: 3.5, side: -1, back: 1.0, speaker: 'mina', text: 'Wave nicely. And Dust? Come back.' }),
   ]);

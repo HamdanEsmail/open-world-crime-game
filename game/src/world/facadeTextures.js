@@ -3,7 +3,9 @@
 // in its alpha (which pixels take the building's tint, which keep their own colour, which are cut
 // away), and a matching glow atlas holds the lit windows, shop lights and neon of the night.
 import * as THREE from 'three';
-import * as paint from './facadeTilePainters.js';
+import * as towerPainters from './facadeTowerPainters.js';
+import * as streetPainters from './facadeStreetPainters.js';
+import * as materialPainters from './facadeTilePainters.js';
 import { SIGN_CATALOG, paintSignTile } from './neonSigns.js';
 
 /** How a tile glows: not at all, as windows lit one by one at dusk, always, or always in its tint. */
@@ -80,6 +82,9 @@ export function createFacadeAtlas(game) {
 
   return { colorTexture, glowTexture, tiles, tileList, tileRects, tileInfo, size: ATLAS_SIZE, canvas: { color, mask, glow } };
 }
+
+/** Every tile painter by name: tower skins, street-level walls, landmark emblems and materials. */
+const paint = { ...towerPainters, ...streetPainters, ...materialPainters };
 
 /**
  * The tiles, row by row of 128-pixel cells (a cell with a fourth number is a quarter cell).

@@ -17,6 +17,7 @@ import { playCredits, playStoryCard } from './creditsRoll.js';
 export async function playBadgeEnding(m, carry = {}) {
   const scope = openJobScope(m);
   try {
+    recordTheEnding(m, 'badge');
     const act = prepareTheAct(m, scope, carry);
     m.wanted.clear();
     m.wanted.lock(0);
@@ -43,6 +44,7 @@ export async function playBadgeEnding(m, carry = {}) {
 export async function playCrewEnding(m, carry = {}) {
   const scope = openJobScope(m);
   try {
+    recordTheEnding(m, 'crew');
     const act = prepareTheAct(m, scope, carry);
     m.setWeather(1, 2);
     if (m.resumeFrom === 'crew_dunes') {
@@ -92,7 +94,7 @@ function prepareTheAct(m, scope, carry) {
 async function zaydMakesTheCall(act) {
   const { m, crew, summit } = act;
   const zayd = m.game.player.character;
-  if (m.game.player.vehicle) m.teleportPlayer(act.spire.door.x, act.spire.door.z + 5, Math.PI);
+  if (m.game.player.vehicle || playerDistance(m, act.spire.door) > 8) m.teleportPlayer(act.spire.door.x, act.spire.door.z + 5, Math.PI);
   zayd.intent.gesture = 'phone';
   await m.cutscene([
     twoShot(m, zayd, crew.mina, { seconds: 4.5, side: -1, speaker: 'zayd', text: "Dahan. It's Karam. The vault is open. Come and get it." }),
@@ -489,6 +491,15 @@ function letTaviReactToCrashes(act) {
     if (!event || (event.vehicle !== summit && event.other !== summit) || !(event.speed > 7)) return;
     voice.react(TAVI_ON_THE_RUN, 5);
   });
+}
+
+/** The story remembers which road was taken (also when an ending is replayed from its checkpoint). */
+function recordTheEnding(m, which) {
+  const story = m.game.story;
+  if (!story || story.ending === which) return;
+  if (typeof story.setEnding === 'function') story.setEnding(which);
+  else story.ending = which;
+  m.flag('ending', which);
 }
 
 function usable(vehicle) {

@@ -145,7 +145,7 @@ function sideOf(station, offset, out) {
 
 /** Highway tarmac: sun-bleached, darker in the wheel paths of each lane, dusty toward the shoulders. */
 function layHighway(ground, line, half) {
-  const profile = [[-half, 0.86], [-half + 2.2, 0.98], [-8, 1.02], [-6.8, 0.94], [-5.6, 1.0], [-3.4, 0.94], [-2.2, 1.0], [-1, 1.04], [1, 1.04], [2.2, 1.0], [3.4, 0.94], [5.6, 1.0], [6.8, 0.94], [8, 1.02], [half - 2.2, 0.98], [half, 0.86]];
+  const profile = [[-half, 0.86], [-8, 1.02], [-6.6, 0.94], [-3.4, 0.94], [-1, 1.04], [1, 1.04], [3.4, 0.94], [6.6, 0.94], [8, 1.02], [half, 0.86]];
   const tint = ground.tintOf(0xf2ece4);
   const point = { x: 0, z: 0 };
   ground.grid('base', SURFACE.ASPHALT_BLEACHED, line.length, profile.length, (i, j, out) => {
@@ -164,8 +164,8 @@ function layHighway(ground, line, half) {
 
 /** A packed-sand track with two dark ruts down each lane, its texture streaked along the way. */
 function layTrack(ground, line, half) {
-  const profile = [[-half, 1.06], [-3.1, 1.0], [-2.6, 0.82], [-2.0, 0.96], [-1.4, 0.84], [-0.9, 1.0], [0, 1.04], [0.9, 1.0], [1.4, 0.84], [2.0, 0.96], [2.6, 0.82], [3.1, 1.0], [half, 1.06]];
-  const tint = ground.tintOf(0xfff0dc);
+  const profile = [[-half, 1.08], [-3.1, 1.04], [-2.6, 0.9], [-2.0, 1.0], [-1.4, 0.9], [-0.9, 1.04], [0.9, 1.04], [1.4, 0.9], [2.0, 1.0], [2.6, 0.9], [3.1, 1.04], [half, 1.08]];
+  const tint = ground.tintOf(0xfffaf0);
   const point = { x: 0, z: 0 };
   ground.grid('base', SURFACE.DIRT, line.length, profile.length, (i, j, out) => {
     sideOf(line[i], profile[j][0], point);
@@ -272,19 +272,19 @@ function blowSandOverEdges(ground, line, half, reach, rng) {
     let inner = rng.range(0.3, reach);
     for (let i = 0; i < line.length - 1; i += 1) {
       const next = rng.range(0.2, reach);
-      const steps = Math.max(1, Math.round((line[i + 1].s - line[i].s) / 7));
+      const steps = Math.max(1, Math.round((line[i + 1].s - line[i].s) / 11));
       for (let k = 0; k < steps; k += 1) {
         const t0 = k / steps;
         const t1 = (k + 1) / steps;
-        const w0 = inner + (next - inner) * t0 + Math.sin((line[i].s + k * 7) * 0.37) * 0.35;
-        const w1 = inner + (next - inner) * t1 + Math.sin((line[i].s + (k + 1) * 7) * 0.37) * 0.35;
+        const w0 = inner + (next - inner) * t0 + Math.sin((line[i].s + k * 11) * 0.37) * 0.35;
+        const w1 = inner + (next - inner) * t1 + Math.sin((line[i].s + (k + 1) * 11) * 0.37) * 0.35;
         const s0 = lerpStation(line[i], line[i + 1], t0);
         const s1 = lerpStation(line[i], line[i + 1], t1);
         sideOf(s0, side * (half - w0), a);
         sideOf(s1, side * (half - w1), b);
         sideOf(s1, side * (half + 1.6), c);
         sideOf(s0, side * (half + 1.6), d);
-        ground.polygon('paint', [[a.x, a.z], [b.x, b.z], [c.x, c.z], [d.x, d.z]], DRIFT_Y, SURFACE.SAND, { tint: 0xf6dcb0, jitter: 0.08 });
+        ground.polygon('paint', [[a.x, a.z], [b.x, b.z], [c.x, c.z], [d.x, d.z]], DRIFT_Y, SURFACE.SAND, { tint: 0xf8dcb0, jitter: 0.04, scale: 1 });
       }
       inner = next;
     }

@@ -5,6 +5,7 @@
 // out of a jam. It writes vehicle.controls through game.vehicles.autopilot and by hand.
 import * as THREE from 'three';
 import { createPoliceRoadDriving } from './policeRoadDriving.js';
+import { pitManoeuvreAllowed } from './wantedLevelRules.js';
 
 /** The suspect's recent path: one crumb every TRAIL_STEP seconds, TRAIL_SIZE of them (12 s). */
 const TRAIL_SIZE = 48;
@@ -13,7 +14,7 @@ const TRAIL_STEP = 0.25;
 const STUCK_RECOVER_AFTER = 3;
 const RECOVER_SECONDS = 1.5;
 /** Beyond this distance a unit out of the player's view gets a gentle push to keep the chase tense. */
-const RUBBER_BAND_DISTANCE = 90;
+const RUBBER_BAND_DISTANCE = 75;
 const RUBBER_BAND_ACCEL = 3.2;
 
 /**
@@ -78,7 +79,7 @@ export function createPursuitDriver(game) {
     if (!ctx.pursuit && remaining < 40) pace = Math.min(pace, 9 + remaining * 0.4);
     steerAndDrive(unit, aim.x, aim.z, pace, false, 3, ctx, dt);
     rubberBand(unit, ctx, dt);
-    if (ctx.pursuit && unit.distance < 95 && (unit.sees || unit.distance < 35)) {
+    if (ctx.pursuit && unit.distance < (ctx.onFoot ? 45 : 95) && (unit.sees || unit.distance < 35)) {
       unit.state = 'chasing';
       drive.losTimer = 0;
     } else if (!ctx.pursuit && remaining < 22) {
@@ -115,16 +116,16 @@ export function createPursuitDriver(game) {
       pace = slot.speed;
       stop = slot.stop;
       arrive = slot.arrive;
-    } else if (drive.directToPlayer) {
+    } else if (drive.directToPlayer && !ctx.onFoot) {
       tx = ctx.px + ctx.pvx * 0.5;
       tz = ctx.pz + ctx.pvz * 0.5;
       pace = Math.max(slot.speed, ctx.pspeed + 3);
-      if (ctx.onFoot || ctx.pspeed < 3) {
+      if (ctx.pspeed < 3) {
         stop = true;
         arrive = 9;
         pace = Math.min(pace, 12);
       }
-    } else if (drive.crumb >= 0 && drive.crumb < trail.seq && trail.seq - drive.crumb < TRAIL_SIZE) {
+    } else if (!ctx.onFoot && drive.crumb >= 0 && drive.crumb < trail.seq && trail.seq - drive.crumb < TRAIL_SIZE) {
       let index = drive.crumb % TRAIL_SIZE;
       if ((trail.x[index] - p.x) ** 2 + (trail.z[index] - p.z) ** 2 < 81 && drive.crumb < trail.seq - 1) {
         drive.crumb += 1;
@@ -138,8 +139,8 @@ export function createPursuitDriver(game) {
       pace = Math.min(top, roads.cornerApproachSpeed(turn, Math.hypot(tx - p.x, tz - p.z)));
     } else {
       drive.routeAge += dt;
-      const driftSq = (drive.routeTargetX - ctx.px) ** 2 + (drive.routeTargetZ - ctx.pz) ** 2;
-      if (drive.routeCount === 0 || driftSq > 30 * 30 || drive.routeAge > 3) roads.planRoute(drive, p.x, p.z, ctx.px, ctx.pz);
+      const driftSq = (drive.routeTargetX - ctx.targetX) ** 2 + (drive.routeTargetZ - ctx.targetZ) ** 2;
+      if (drive.routeCount === 0 || driftSq > 30 * 30 || drive.routeAge > 3) roads.planRoute(drive, p.x, p.z, ctx.targetX, ctx.targetZ);
       roads.followRoute(drive, p.x, p.z, 10 + Math.abs(vehicle.speed) * 0.55, aim);
       tx = aim.x;
       tz = aim.z;
@@ -148,8 +149,8 @@ export function createPursuitDriver(game) {
     steerAndDrive(unit, tx, tz, pace, stop, arrive, ctx, dt);
     applyManoeuvres(unit, ctx);
     rubberBand(unit, ctx, dt);
-    // Lost him: back to the roads, toward where he was last seen.
-    if (!ctx.pursuit || (!unit.sees && ctx.now - unit.lastSeen > 6 && unit.distance > 80)) {
+    // Lost him (or he is on foot far off): back to the roads, toward where he was last seen.
+    if (!ctx.pursuit || (!unit.sees && ctx.now - unit.lastSeen > 6 && unit.distance > 80) || (ctx.onFoot && unit.distance > 65)) {
       unit.state = 'responding';
       roads.dropRoute(drive);
     }
@@ -249,17 +250,20 @@ export function createPursuitDriver(game) {
     const role = unit.role;
 
     if (ctx.onFoot) {
-      // Pull up short of a man on foot, on the side the car comes from.
-      const k = d > 0.1 ? 10 / d : 0;
-      sx = ctx.px + dx * k;
-      sz = ctx.pz + dz * k;
+      // Pull up at the kerb nearest a man on foot, a few metres short on the side the car comes from.
+      const kx = p.x - ctx.curbX;
+      const kz = p.z - ctx.curbZ;
+      const k = Math.sqrt(kx * kx + kz * kz);
+      const back = k > 7 ? 7 / k : 0;
+      sx = ctx.curbX + kx * back;
+      sz = ctx.curbZ + kz * back;
       slot.x = sx;
       slot.z = sz;
       slot.aimX = sx;
       slot.aimZ = sz;
       slot.stop = true;
       slot.arrive = 2.5;
-      slot.speed = d > 45 ? top * 0.85 : Math.max(6, d * 0.5);
+      slot.speed = Math.min(top * 0.6, 8 + k * 0.3);
       return;
     }
     if (role === 'boxRear' || role === 'boxFront' || role === 'boxLeft' || role === 'boxRight') {
@@ -278,15 +282,17 @@ export function createPursuitDriver(game) {
       return;
     }
     if (role === 'lead') {
-      if (ctx.ram && S > 9 && lon < 0 && lon > -(L * 2 + 12) && Math.abs(lat) < 5) {
+      if (pitManoeuvreAllowed(ctx.level, S) && lon < 0 && lon > -(L * 2 + 12) && Math.abs(lat) < 5) {
         // Line up beside his rear quarter for the PIT.
         const side = lat >= 0 ? 1 : -1;
         sx = ctx.px - fx * (L * 0.7 + 1.6) + rx * side * 2.5;
         sz = ctx.pz - fz * (L * 0.7 + 1.6) + rz * side * 2.5;
-      } else if (ctx.ram && (S < 9 || d < 12)) {
+      } else if (ctx.ram && (S < 9 || d < 12) && ctx.now > unit.drive.ramCooldown) {
         sx = ctx.px + ctx.pvx * 0.35;
         sz = ctx.pz + ctx.pvz * 0.35;
         ramming = true;
+        // After the hit, drop back a moment before the next one.
+        if (d < 6.5) unit.drive.ramCooldown = ctx.now + 2.5;
       } else {
         sx = ctx.px - fx * (L + 6);
         sz = ctx.pz - fz * (L + 6);
@@ -312,6 +318,11 @@ export function createPursuitDriver(game) {
       const side = unit.id % 2 === 0 ? 3 : -3;
       sx = ctx.px - fx * (L + 13) + rx * side;
       sz = ctx.pz - fz * (L + 13) + rz * side;
+      if (S < 3.5) {
+        // He has stopped: hold back and block the road behind.
+        slot.stop = true;
+        slot.arrive = 3;
+      }
     } else {
       sx = ctx.px;
       sz = ctx.pz;
@@ -487,7 +498,7 @@ export function createPursuitDriver(game) {
     const aligned = Math.abs(game.math.angleDelta(vehicle.heading, target.heading)) < 0.4;
     if (!aligned || Math.abs(vehicle.speed - S) > 5.5) return;
     const L = ctx.pHalfLength;
-    if (unit.role === 'lead' && S > 10 && now > drive.pitCooldown) {
+    if (unit.role === 'lead' && pitManoeuvreAllowed(ctx.level, S) && now > drive.pitCooldown) {
       const reach = L + vehicle.dynamics.profile.halfLength;
       if (lon < -L * 0.2 && lon > -reach * 1.05 && Math.abs(lat) > 1.3 && Math.abs(lat) < 3.4) {
         drive.pitUntil = now + 0.55;

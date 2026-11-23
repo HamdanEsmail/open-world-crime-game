@@ -2,6 +2,7 @@
 // straight on, keeping to its lane), the smooth curve it drives from its stop line into the lane it
 // turns into, which of those curves cross, and who goes first: the lights, then whoever is already
 // crossing, then whoever arrived first or comes from the right. Nobody pulls in without room to leave.
+import { turnWeight, laneAfterTurn, mustGiveWay } from './trafficRules.js';
 
 /** Straight pieces each crossing curve is cut into. */
 export const PATH_PIECES = 12;
@@ -12,12 +13,8 @@ const TURN_LATERAL_ACCEL = 2.7;
 const SLOWEST_TURN = 3.5;
 /** A crossing car this close to the end of its curve no longer blocks anyone. */
 const CLEARING_DISTANCE = 4.5;
-/** Seconds within which two arrivals at a junction without lights count as the same moment. */
-const SAME_TIME = 0.6;
 /** Seconds refused at the line before a driver no longer gives way to a car that is not moving either. */
 const PATIENCE = 8;
-/** How likely each way out of a junction is: mostly straight on. */
-const TURN_WEIGHTS = { straight: 6, right: 2.2, left: 1.9, uturn: 0.4 };
 
 /**
  * Build the junction rules shared by every traffic driver.
@@ -49,16 +46,8 @@ export function createTrafficJunctions(game, traffic) {
     for (let i = 0; i < count; i += 1) {
       const option = options[i];
       const turn = option.edge === lane.edge ? 'uturn' : lane.turns[i];
-      const lanesThere = option.edge.lanesEachWay;
-      let wanted;
-      if (bend || turn === 'straight') wanted = Math.min(lane.index, lanesThere - 1);
-      else if (turn === 'left') wanted = 0;
-      else wanted = lanesThere - 1;
-      let weight = option.index === wanted ? TURN_WEIGHTS[turn] || 1 : 0;
-      if (!bend && lanesHere > 1) {
-        if (turn === 'left' && lane.index !== 0) weight = 0;
-        if (turn === 'right' && lane.index !== lanesHere - 1) weight = 0;
-      }
+      const wanted = laneAfterTurn(turn, lane.index, option.edge.lanesEachWay, bend);
+      let weight = option.index === wanted ? turnWeight(turn, lane.index, lanesHere, bend) : 0;
       if (className === 'bus' && option.kind !== 'boulevard') weight *= 0.03;
       if (option === avoid) weight *= 0.02;
       if (isDeadEnd(option)) weight *= 0.1;
@@ -140,31 +129,20 @@ export function createTrafficJunctions(game, traffic) {
       const otherEta = Math.max(0, other.distToLine) / Math.max(1.5, other.vehicle.speed);
       if (other.committed && (other.distToLine < 4 || otherEta < 6)) return waitFor(state, other);
       if (other.distToLine > 26) continue;
-      if (node.signal) {
-        if (!other.signalGo) continue;
-        if (path.turn === 'left' && otherPath.turn !== 'left') {
-          if (otherEta < 3.8) return waitFor(state, other);
+      if (node.signal && !other.signalGo) continue;
+      if (!node.signal) {
+        const otherPriority = onPriorityRoad(otherPath);
+        if (myPriority && !otherPriority) continue;
+        if (otherPriority && !myPriority) {
+          if (otherEta < 4.5) return waitFor(state, other);
           continue;
         }
-        if (otherPath.turn === 'left' && path.turn !== 'left') continue;
-        if (otherEta < myEta - 0.4) return waitFor(state, other);
-        continue;
       }
-      const otherPriority = onPriorityRoad(otherPath);
-      if (myPriority && !otherPriority) continue;
-      if (otherPriority && !myPriority) {
-        if (otherEta < 4.5) return waitFor(state, other);
-        continue;
+      const otherArrival = other.arrivedAt >= 0 && other.distToLine < 6 ? other.arrivedAt : -1;
+      const patient = now - state.arrivedAt < 3 + (state.vehicle.id % 4);
+      if (mustGiveWay(node.signal, path.turn, otherPath.turn, myEta, otherEta, state.arrivedAt, otherArrival, comesFromRight(path, otherPath), patient)) {
+        return waitFor(state, other);
       }
-      if (other.arrivedAt >= 0 && other.distToLine < 6) {
-        if (state.arrivedAt < 0 || other.arrivedAt < state.arrivedAt - SAME_TIME) return waitFor(state, other);
-        const patience = 3 + (state.vehicle.id % 4);
-        if (other.arrivedAt <= state.arrivedAt + SAME_TIME && comesFromRight(path, otherPath) && now - state.arrivedAt < patience) {
-          return waitFor(state, other);
-        }
-        continue;
-      }
-      if (state.arrivedAt < 0 && comesFromRight(path, otherPath) && otherEta < myEta + 0.8) return waitFor(state, other);
     }
     return true;
   }

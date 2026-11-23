@@ -56,9 +56,9 @@ async function openOnCollectionDay(m, scene) {
   await m.cutscene([
     framedShot(m, scene.centre, { distance: 78, height: 40, yaw: 0.6, lookHeight: 0, seconds: 4.6, drift: 20,
       speaker: 'mina', text: 'Thursday. Collection day. The Dune Jackals call it sand tax.' }),
-    framedShot(m, pair, { distance: 5.6, height: 1.75, yaw: 0.95, lookHeight: 1.55, seconds: 4, drift: 0.8,
+    framedShot(m, pair, { distance: 5.2, height: 1.7, yaw: 0.35, lookHeight: 1.5, seconds: 4, drift: 0.8,
       speaker: 'mina', text: 'Old Hamid pays. I pay. Today nobody pays.' }),
-    framedShot(m, scene.stall, { distance: 11, height: 2.6, yaw: 0.8, lookHeight: 1.2, seconds: 4, drift: 3,
+    framedShot(m, scene.stall, { distance: 10, height: 3.4, yaw: 1.3, lookHeight: 1, seconds: 4, drift: 2.5,
       speaker: 'Jackal', text: 'Sand tax went up, grandfather. Strong wind this year.' }),
     framedShot(m, scene.qadirSpot, { distance: 8.5, height: 2.1, yaw: -1.2, lookHeight: 1.4, seconds: 3.6, drift: 1.5,
       speaker: 'zayd', text: 'And the one leaning on the pickup?' }),
@@ -75,7 +75,7 @@ async function openOnCollectionDay(m, scene) {
     ['zayd', 'The crew won\'t like soft.'],
     ['dahan', 'The crew doesn\'t decide what happens to you. I do.'],
   ]));
-  await m.reach(scene.entry, 9, { onFoot: true, label: 'Souk square' });
+  await m.reach(scene.entry, 8, { onFoot: true, label: 'Souk square' });
 }
 
 /** Three brawlers with bare fists, then a bat and a gun out of the Spice Arcade. */
@@ -100,10 +100,10 @@ async function brawlInTheSquare(m, scene) {
     },
   });
 
-  // The rest of the crew comes out of the Spice Arcade armed.
-  const west = scene.square.x0 + 4;
-  const batman = m.spawnPerson({ archetype: 'gang', kind: 'gang', faction: 'gang', name: 'Dune Jackal', x: west, z: scene.centre.z - 7, heading: Math.PI / 2, weapon: 'bat', health: 60 });
-  const gunman = m.spawnPerson({ archetype: 'gang', kind: 'gang', faction: 'gang', name: 'Dune Jackal', x: west - 2, z: scene.centre.z + 9, heading: Math.PI / 2, weapon: 'pistol', ammo: 36, health: 45 });
+  // The rest of the crew comes out of the Spice Arcade armed, down the aisles either side of the middle.
+  const west = scene.square.x0 + 3;
+  const batman = m.spawnPerson({ archetype: 'gang', kind: 'gang', faction: 'gang', name: 'Dune Jackal', x: west, z: scene.centre.z - scene.aisle, heading: Math.PI / 2, weapon: 'bat', health: 60 });
+  const gunman = m.spawnPerson({ archetype: 'gang', kind: 'gang', faction: 'gang', name: 'Dune Jackal', x: west, z: scene.centre.z + scene.aisle, heading: Math.PI / 2, weapon: 'pistol', ammo: 36, health: 45 });
   const armed = [batman, gunman];
   m.hostile(batman, { accuracy: 0.5, style: 'rush' });
   later(m, 3.5, () => m.hostile(gunman, { accuracy: 0.16, style: 'cover' }));
@@ -368,10 +368,13 @@ function surveySouk(m) {
   };
   const pickupSpot = kerbSpot(m, lot.x1 + 12, court.z);
   const toCourt = Math.atan2(court.x - pickupSpot.x, court.z - pickupSpot.z);
+  // The stalls stand in east-west rows round a clear centre (a fountain, four palms seven metres
+  // out); the aisles a little either side of the middle run straight in from the east and west.
+  const aisle = 5.7;
   return {
-    souk, square, centre, contact, court,
-    entry: { x: square.x1 - 6, z: square.z1 - 6 },
-    stall: { x: centre.x + 14, z: centre.z + 6 },
+    souk, square, centre, contact, court, aisle,
+    entry: { x: centre.x + 13, z: centre.z + aisle },
+    stall: { x: centre.x, z: centre.z + 9 },
     pickupSpot,
     qadirSpot: { x: pickupSpot.x + Math.sin(toCourt) * 3.2, z: pickupSpot.z + Math.cos(toCourt) * 3.2, heading: toCourt },
     summitSpot: kerbSpot(m, court.x - 4, contact.curbZ !== undefined ? contact.curbZ : contact.z + 5),
@@ -383,7 +386,7 @@ function surveySouk(m) {
 
 /** The Jackals at Old Hamid's stall, Qadir by his pickup, and the Summit waiting on Souk Street. */
 function spawnTheCollectors(m, scene) {
-  const spots = standingSpots(m, scene.stall.x, scene.stall.z, 3, { radius: 3.4, start: -0.6, arc: Math.PI * 1.4 });
+  const spots = standingSpots(m, scene.stall.x, scene.stall.z, 3, { radius: 3, start: 1.2, arc: Math.PI * 1.3 });
   scene.brawlers = spots.map((spot) => {
     const brawler = m.spawnPerson({ archetype: 'gang', kind: 'gang', faction: 'gang', name: 'Dune Jackal', x: spot.x, z: spot.z, heading: spot.heading, health: 55 });
     m.calm(brawler);

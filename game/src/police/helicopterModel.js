@@ -91,9 +91,12 @@ export function buildShaheenModel() {
     mainHub.rotation.y = bladeAngle;
     discUniforms.uAngle.value = bladeAngle;
     discUniforms.uOpacity.value = 0.25 + 0.75 * Math.min(1, rotorSpeed * 1.4);
+    // The disc is not lit by the scene's lights: shade its colour down as the night falls.
+    discUniforms.uShade.value = 1 - 0.8 * night;
     tailHub.rotation.x = tailAngle;
     tailUniforms.uAngle.value = tailAngle;
     tailUniforms.uOpacity.value = discUniforms.uOpacity.value;
+    tailUniforms.uShade.value = discUniforms.uShade.value;
     navLights.uniforms.uTime.value = time;
     navLights.uniforms.uNight.value = night;
     navLights.uniforms.uPixelScale.value = pixelScale;
@@ -278,6 +281,7 @@ function createRotorDiscMaterial(blades, color, tipColor, strength) {
       uAngle: { value: 0 },
       uBlades: { value: blades },
       uOpacity: { value: 1 },
+      uShade: { value: 1 },
       uStrength: { value: strength },
       uColor: { value: new THREE.Color(color) },
       uTipColor: { value: new THREE.Color(tipColor) },
@@ -478,6 +482,7 @@ const ROTOR_FRAGMENT_SHADER = /* glsl */ `
 uniform float uAngle;
 uniform float uBlades;
 uniform float uOpacity;
+uniform float uShade;
 uniform float uStrength;
 uniform vec3 uColor;
 uniform vec3 uTipColor;
@@ -492,9 +497,10 @@ void main() {
   float smear = pow(f, 7.0) + 0.3 * pow(f, 2.2);
   float body = smoothstep(0.06, 0.2, r) * (1.0 - smoothstep(0.96, 1.0, r));
   float alpha = (0.07 + 0.5 * smear * smoothstep(0.12, 0.4, r)) * body;
-  float tip = smoothstep(0.84, 0.88, r) * (1.0 - smoothstep(0.92, 0.96, r));
-  vec3 color = mix(uColor, uTipColor, tip * 0.9);
-  alpha += tip * (0.18 + 0.3 * smear);
+  // The painted blade tips smear into a thin ring.
+  float tip = smoothstep(0.87, 0.9, r) * (1.0 - smoothstep(0.92, 0.95, r));
+  vec3 color = mix(uColor, uTipColor, tip * 0.75) * uShade;
+  alpha += tip * (0.1 + 0.22 * smear);
   gl_FragColor = vec4(color, clamp(alpha * uOpacity * uStrength, 0.0, 1.0));
   #include <colorspace_fragment>
 }

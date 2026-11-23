@@ -55,13 +55,32 @@ export function createTerrainHeight(game) {
   /** The ground without the ramps: city, shore and dunes. */
   function baseHeightAt(x, z) {
     if (z < coast.beachTopZ) return shoreHeightAt(x, z);
+    if (insideCityPaving(x, z)) return cityPavingAt(x, z) === ROAD ? 0 : KERB_HEIGHT;
     const outside = distanceOutsideCity(x, z);
-    if (outside <= 24) return outside <= edge && cityPavingAt(x, z) !== ROAD ? KERB_HEIGHT : 0;
+    if (outside <= 24) return 0;
     return duneHeightAt(x, z, outside);
+  }
+
+  /** True inside the street grid and its outer ring of sidewalk. */
+  function insideCityPaving(x, z) {
+    return x >= urban.minX - edge && x <= urban.maxX + edge && z <= urban.maxZ + edge;
   }
 
   /** Inside the street grid: ROAD, SIDEWALK or PLAZA (the floor of a block). Roads are at 0, the rest a kerb higher. */
   function cityPavingAt(x, z) {
+    // Beyond the ring roads there is only their own outer half and its sidewalk, cut where a highway leaves the city.
+    const west = urban.minX - x;
+    const east = x - urban.maxX;
+    const south = z - urban.maxZ;
+    const north = urban.minZ - z;
+    if (west > 0 || east > 0 || south > 0 || north > 0) {
+      const ringHalf = 14;
+      const acrossX = Math.max(west, east);
+      const acrossZ = Math.max(south, north);
+      if (acrossX <= ringHalf && acrossZ <= ringHalf) return ROAD;
+      const road = distanceToDesertRoad(x, z);
+      return road.distance < road.half + 2.5 ? ROAD : SIDEWALK;
+    }
     let nearAvenue = 1e9;
     let halfAvenue = 0;
     for (let i = 0; i < avenueX.length; i += 1) {
@@ -162,7 +181,7 @@ export function createTerrainHeight(game) {
       if (x > port.minX && x < port.maxX) return 'plaza';
       return 'beach';
     }
-    if (distanceOutsideCity(x, z) <= edge) {
+    if (insideCityPaving(x, z)) {
       const paving = cityPavingAt(x, z);
       return paving === ROAD ? 'road' : paving === SIDEWALK ? 'sidewalk' : 'plaza';
     }

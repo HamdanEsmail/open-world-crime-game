@@ -3,25 +3,26 @@
 // plazas, and street-name blades on every corner carrying the real names. Clean modern kit in the
 // rich districts, mismatched painted drums and plank benches in Al Wadi Flats, Southgate and the docks.
 import { createPropRecord } from './propInstancing.js';
+import { propBreaksUnderImpact } from './streetFurnitureRules.js';
 import {
   buildModernBench, buildRoughBench, buildModernBin, buildDrumBin, buildHydrant, buildBollard,
   buildBusShelter, buildNameSignPole, buildParkingMeter, buildNewsBox, buildBikeRack, buildPlanter,
 } from './streetPropModels.js';
 
-/** Each kind: model, draw distance, shadow, collider (post radius or box half-size) and how it falls. */
+/** Each kind: model, draw distance, shadow, collider (post radius or box half-size). How it falls is a rule. */
 const KINDS = {
-  benchModern: { build: buildModernBench, range: 130, box: [0.98, 0.32], height: 0.9, collider: 'bench', fall: 'fly' },
-  benchRough: { build: buildRoughBench, range: 130, box: [0.95, 0.25], height: 0.5, collider: 'bench', fall: 'fly' },
-  binModern: { build: buildModernBin, range: 110, radius: 0.27, height: 1.0, collider: 'bin', fall: 'fly' },
-  binDrum: { build: buildDrumBin, range: 110, radius: 0.3, height: 1.0, collider: 'bin', fall: 'fly' },
-  hydrant: { build: buildHydrant, range: 100, radius: 0.18, height: 0.9, collider: 'hydrant', fall: 'fly', water: true },
-  bollard: { build: buildBollard, range: 120, radius: 0.12, height: 1.0, collider: 'bollard', solid: true },
-  busShelter: { build: buildBusShelter, range: 260, box: [2.15, 0.85], height: 2.8, collider: 'shelter', solid: true, shadow: true },
-  nameSign: { build: buildNameSignPole, range: 140, radius: 0.08, height: 3.6, collider: 'streetSign', fall: 'topple' },
-  parkingMeter: { build: buildParkingMeter, range: 90, radius: 0.08, height: 1.4, collider: 'parkingMeter', fall: 'topple' },
-  newsBox: { build: buildNewsBox, range: 100, box: [0.27, 0.24], height: 1.1, collider: 'newsBox', fall: 'fly' },
-  bikeRack: { build: buildBikeRack, range: 90, box: [0.72, 0.38], height: 0.9, collider: 'bikeRack', fall: 'fly' },
-  planter: { build: buildPlanter, range: 150, box: [1.22, 0.52], height: 0.7, collider: 'planter', solid: true },
+  benchModern: { build: buildModernBench, range: 130, box: [0.98, 0.32], height: 0.9, collider: 'bench' },
+  benchRough: { build: buildRoughBench, range: 130, box: [0.95, 0.25], height: 0.5, collider: 'bench' },
+  binModern: { build: buildModernBin, range: 110, radius: 0.27, height: 1.0, collider: 'bin' },
+  binDrum: { build: buildDrumBin, range: 110, radius: 0.3, height: 1.0, collider: 'bin' },
+  hydrant: { build: buildHydrant, range: 100, radius: 0.18, height: 0.9, collider: 'hydrant', water: true },
+  bollard: { build: buildBollard, range: 120, radius: 0.12, height: 1.0, collider: 'bollard' },
+  busShelter: { build: buildBusShelter, range: 260, box: [2.15, 0.85], height: 2.8, collider: 'shelter', shadow: true },
+  nameSign: { build: buildNameSignPole, range: 140, radius: 0.08, height: 3.6, collider: 'streetSign' },
+  parkingMeter: { build: buildParkingMeter, range: 90, radius: 0.08, height: 1.4, collider: 'parkingMeter' },
+  newsBox: { build: buildNewsBox, range: 100, box: [0.27, 0.24], height: 1.1, collider: 'newsBox' },
+  bikeRack: { build: buildBikeRack, range: 90, box: [0.72, 0.38], height: 0.9, collider: 'bikeRack' },
+  planter: { build: buildPlanter, range: 150, box: [1.22, 0.52], height: 0.7, collider: 'planter' },
 };
 
 const MODERN = new Set(['spires', 'marina', 'lantern', 'jasmine']);
@@ -122,8 +123,9 @@ export function createStreetProps(game, kit, palms, printed, billboards) {
     if (!claimFootprint(spec, x, z, yaw, options.claim)) return null;
     const y = kit.ground(x, z);
     const record = createPropRecord({ kind, x, y, z, yaw, color: options.color, footprint: spec.box ? Math.min(spec.box[0], spec.box[1]) : spec.radius });
-    record.def = { fall: spec.fall || 'none', height: spec.height, water: !!spec.water };
-    const breakable = !spec.solid;
+    const fall = propBreaksUnderImpact(kind);
+    record.def = { fall, height: spec.height, water: !!spec.water };
+    const breakable = fall !== 'solid';
     if (spec.box) {
       const quarter = Math.abs(Math.sin(yaw)) > 0.7;
       const hx = quarter ? spec.box[1] : spec.box[0];

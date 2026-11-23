@@ -4,8 +4,8 @@
 // so most miss; the ones that land hurt, but never all at once.
 import * as THREE from 'three';
 import { DOOR_LEFT, DOOR_RIGHT } from './helicopterModel.js';
+import { doorGunnerFiresAtStars } from './policeHeavyResponseRules.js';
 
-const MIN_STARS = 5;
 const RANGE = 140;
 const SHOT_INTERVAL = 0.095;
 const BURST_MIN = 4;
@@ -13,8 +13,8 @@ const BURST_EXTRA = 3;
 const PAUSE_MIN = 2.4;
 const PAUSE_EXTRA = 1.8;
 /** Damage per hit: a car soaks a few bursts, a person on foot many seconds of them. */
-const VEHICLE_DAMAGE = [14, 22];
-const PERSON_DAMAGE = [5, 8];
+const VEHICLE_DAMAGE = [10, 16];
+const PERSON_DAMAGE = [4, 7];
 
 /**
  * Create the gunner for a helicopter (it reads helicopter.position, heading, state and seesPlayer).
@@ -64,7 +64,7 @@ export function createHelicopterDoorGunner(game, helicopter) {
   /** Five stars, on station, eyes on the suspect, in range, and a live target. */
   function ready() {
     const level = game.wanted && typeof game.wanted.level === 'number' ? game.wanted.level : 0;
-    if (level < MIN_STARS || helicopter.state !== 'onStation' || !helicopter.seesPlayer || helicopter.staged) return false;
+    if (!doorGunnerFiresAtStars(level) || helicopter.state !== 'onStation' || !helicopter.seesPlayer || helicopter.staged) return false;
     const player = game.player;
     if (!player || !player.character || player.state === 'down' || player.character.alive === false) return false;
     return helicopter.distanceToPlayer < RANGE;
@@ -92,7 +92,7 @@ export function createHelicopterDoorGunner(game, helicopter) {
     aimPoint.set(target.pos.x, target.pos.y + centreHeight, target.pos.z);
     if (vel) aimPoint.addScaledVector(vel, 0.06);
     const distance = muzzle.distanceTo(aimPoint);
-    const spread = (vehicle ? 1.1 : 1.6) + distance * 0.011 + targetSpeed * 0.045;
+    const spread = (vehicle ? 1.9 : 2.2) + distance * 0.014 + targetSpeed * 0.05;
     const angle = Math.random() * Math.PI * 2;
     const reach = spread * Math.sqrt(Math.random());
     aimPoint.x += Math.cos(angle) * reach;

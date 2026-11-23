@@ -10,7 +10,7 @@ export function createMotionState() {
   return {
     yawRate: 0, turnLead: 0, crouching: false, windup: 0, windupTimer: 0, jumpHeld: false,
     landingSpeed: 0, airTime: 0, swimming: false, wading: 0, autoTarget: false, autoTargetX: 0, autoTargetZ: 0,
-    lockedTime: 0, lastVehicleHitId: -1, lastVehicleHitTime: -9, stumbleTime: 0,
+    lockedTime: 0, lastVehicleHitId: -1, lastVehicleHitTime: -9, stumbleTime: 0, lastThrowTime: -9, lastBlastTime: -9,
   };
 }
 

@@ -119,7 +119,11 @@ async function driveOutToTheOasis(m, scene) {
     scene.scoutSettled = true;
     if (stopped) {
       if (!isWrecked(scout.vehicle)) m.stopDriving(scout.vehicle);
-      if (!isDown(scout.driver)) m.hostile(scout.driver, { accuracy: 0.25, style: 'cover' });
+      if (!isDown(scout.driver)) {
+        // Out of the cab (a walking order does that) and into the fight.
+        m.walkTo(scout.driver, scout.vehicle.pos.x + 3, scout.vehicle.pos.z + 3, { pace: 'run' }).catch(() => {});
+        m.hostile(scout.driver, { accuracy: 0.25, style: 'cover' });
+      }
       if (scoutObjective) scoutObjective.done();
       chatter(m, [['faris', 'Quiet as a cat in a carburettor.'], ['zayd', 'Scout\'s done.']]);
     } else {
@@ -140,7 +144,7 @@ async function driveOutToTheOasis(m, scene) {
     framedShot(m, scene.buggy, { distance: 9, height: 2.4, yaw: scene.buggy.heading + 2.2, lookHeight: 0.8, seconds: 3.4, drift: 2,
       speaker: 'faris', text: 'My baby! Is she hurt? Is she scratched?' }),
     framedShot(m, scene.campCentre, { distance: 16, height: 4, yaw: scene.approachAngle - 0.5, lookHeight: 1.2, seconds: 3.6,
-      speaker: 'zayd', text: 'She\'s fine. Six men with guns are sitting around her.' }),
+      speaker: 'zayd', text: 'She\'s fine. Four rifles round the fire. More asleep in the tents.' }),
   ]);
   chatter(m, [['faris', 'Ah. Small problem.']]);
 }
@@ -268,9 +272,11 @@ function resumeInTheBuggy(m, scene) {
 
 /** Dune crests to the hideout with Jackal pickups and a buggy on the tail. */
 async function escapeOverTheDunes(m, scene) {
-  const { buggy, barks } = scene;
-  m.failIfDestroyed(buggy, 'Faris\'s buggy is a burning frame in the sand.');
-  m.failIfLeft(buggy, 130, 'You left Faris\'s buggy in the dunes.');
+  const { buggy } = scene;
+  scene.buggyWatch = [
+    m.failIfDestroyed(buggy, 'Faris\'s buggy is a burning frame in the sand.'),
+    m.failIfLeft(buggy, 130, 'You left Faris\'s buggy in the dunes.'),
+  ];
   chatter(m, [['faris', 'Not the road! They own the road. Over the dunes, like Wadi nineteen.']]);
   m.objective('Outrun the Jackals over the dunes to the Dune Hideout');
   sendDuneChasers(m, scene);
@@ -294,6 +300,8 @@ async function homeAtTheHideout(m, scene) {
   else m.trust(2, 'Faris\'s buggy came home, more or less');
   await m.fadeOut(0.8);
   const park = scene.hideout;
+  // The job's buggy makes way for the one Zayd now owns, parked at the hideout.
+  for (const watch of scene.buggyWatch || []) if (watch && watch.stop) watch.stop();
   m.remove(scene.buggy);
   m.unlockSafehouse('safehouse_dunes');
   m.grantVehicle('dune_jackal', 'safehouse_dunes');
@@ -355,7 +363,7 @@ function launchChaser(m, specId, spot) {
   const ride = spawnJackalRide(m, specId, spot, { crew: 2, weapon: specId === 'dune_jackal' ? 'pistol' : 'smg' });
   if (!ride.vehicle) return null;
   m.pursue(ride.vehicle, { aggression: specId === 'dune_jackal' ? 0.8 : 0.65, accuracy: 0.28 });
-  m.marker(ride.vehicle, { label: 'Jackals', kind: 'enemy', color: 0xe4572e, route: false });
+  m.marker(ride.vehicle, { label: 'Jackals', kind: 'enemy', color: 0xe4572e, route: false, beacon: false });
   return ride;
 }
 

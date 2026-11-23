@@ -13,6 +13,8 @@ import { createParkedCars } from './parkedCars.js';
 const LONG_STOP = 10;
 /** Drivers look around once every this many frames, each on its own frame. */
 const THINK_EVERY = 4;
+/** A jump of the player this far (metres, in one frame) fills the streets around the new spot at once. */
+const JUMP_DISTANCE = 120;
 
 /**
  * Build game.traffic.
@@ -34,6 +36,7 @@ export function createTrafficSystem(game) {
   let crashCursor = 0;
   let wallCursor = 0;
   let enabled = true;
+  let fillNow = true;
   const frustum = new THREE.Frustum();
   const viewMatrix = new THREE.Matrix4();
   const sphere = new THREE.Sphere();
@@ -52,7 +55,7 @@ export function createTrafficSystem(game) {
     stats: {
       moving: 0, parked: 0, target: 0, meanSpeed: 0, stoppedLong: 0, abandoned: 0, fleeing: 0,
       collisionsLastMinute: 0, wallHitsLastMinute: 0, redLightsRun: 0, panicRedRuns: 0,
-      spawned: 0, removed: 0, stuckRemoved: 0, parkedSpawned: 0, updateMs: 0, peakMs: 0,
+      spawned: 0, removed: 0, stuckRemoved: 0, parkedSpawned: 0, updateMs: 0, peakMs: 0, drivingMs: 0, spawnMs: 0, parkingMs: 0,
     },
     /** The last few notable things that happened (a red light run, a stuck car taken away), newest last. */
     incidents: [],
@@ -60,6 +63,7 @@ export function createTrafficSystem(game) {
     setEnabled,
     clearArea,
     spawnParked,
+    populateNow,
     isVisible,
     isHeld,
     owns,
@@ -94,20 +98,39 @@ export function createTrafficSystem(game) {
   function update(dt) {
     if (!enabled || !(dt > 0) || !game.roads || !game.vehicles || !game.city) return;
     const started = performance.now();
+    const lastX = traffic.focus.x;
+    const lastZ = traffic.focus.z;
     readFocus();
+    // The player appeared somewhere new (a new game, a respawn, a teleport behind a fade): fill the
+    // streets at once instead of waiting for cars to arrive from out of sight.
+    if (Math.abs(traffic.focus.x - lastX) + Math.abs(traffic.focus.z - lastZ) > JUMP_DISTANCE) fillNow = true;
     const hour = game.time.hour;
     traffic.night = game.sky && typeof game.sky.night === 'number' ? game.sky.night > 0.5 : hour >= 18.5 || hour < 6;
     refreshView();
     traffic.grid.rebuild(traffic.focus.x, traffic.focus.z);
     sweepLostCars();
-    spawner.update(dt);
+    const spawning = performance.now();
+    spawner.update(dt, fillNow);
+    const driving = performance.now();
+    traffic.stats.spawnMs += (driving - spawning - traffic.stats.spawnMs) * 0.05;
     const frame = game.time.frame;
     for (let i = 0; i < drivers.length; i += 1) {
       driverAI.driveTrafficCar(drivers[i], dt, (frame + i) % THINK_EVERY === 0);
     }
     reactions.update(dt);
-    parkedCars.update(dt);
-    measure(performance.now() - started);
+    const driven = performance.now();
+    parkedCars.update(dt, fillNow);
+    traffic.stats.parkingMs += (performance.now() - driven - traffic.stats.parkingMs) * 0.05;
+    fillNow = false;
+    measure(performance.now() - started, driven - driving);
+  }
+
+  /**
+   * Fill the streets around the player on the next frame, in view or not (call it behind a fade,
+   * after a teleport, or when staging a scene). Also happens by itself when the player jumps far.
+   */
+  function populateNow() {
+    fillNow = true;
   }
 
   /**
@@ -115,8 +138,12 @@ export function createTrafficSystem(game) {
    * once and spawns nothing until it is turned on again.
    */
   function setEnabled(on) {
+    const was = enabled;
     enabled = !!on;
-    if (enabled) return;
+    if (enabled) {
+      if (!was) fillNow = true;
+      return;
+    }
     for (let i = drivers.length - 1; i >= 0; i -= 1) removeCar(drivers[i]);
     for (let i = parked.length - 1; i >= 0; i -= 1) if (!parked[i].persistent) removeParked(parked[i]);
     for (let i = fleeing.length - 1; i >= 0; i -= 1) despawnPerson(fleeing[i].character);
@@ -317,8 +344,8 @@ export function createTrafficSystem(game) {
     frustum.setFromProjectionMatrix(viewMatrix);
   }
 
-  /** The numbers the debug readout shows, and the traffic's own cost per frame. */
-  function measure(ms) {
+  /** The numbers the debug readout shows, and the traffic's own cost per frame (all of it, and the drivers' thinking alone). */
+  function measure(ms, drivingMs) {
     const stats = traffic.stats;
     const now = game.time.elapsed;
     let speedSum = 0;
@@ -340,6 +367,7 @@ export function createTrafficSystem(game) {
     stats.wallHitsLastMinute = countSince(wallTimes, now - 60);
     stats.updateMs += (ms - stats.updateMs) * 0.05;
     stats.peakMs = Math.max(ms, stats.peakMs * 0.995);
+    stats.drivingMs += (drivingMs - stats.drivingMs) * 0.05;
   }
 
   return traffic;

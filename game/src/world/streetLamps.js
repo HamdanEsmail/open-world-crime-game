@@ -4,6 +4,7 @@
 // masts are breakable posts that fold when a car hits them.
 import { createShapeBuilder, rgb } from './propShapes.js';
 import { createPropRecord } from './propInstancing.js';
+import { palmSpacingAlongRoad, lampStyleForDistrict, propBreaksUnderImpact } from './streetFurnitureRules.js';
 
 const POLE = rgb(0xc9c6bd);
 const POLE_DARK = rgb(0x8d877b);
@@ -16,11 +17,11 @@ const LANTERN_GLASS = [1.0, 0.8, 0.46];
 
 /** What each lamp kind is: how far it is drawn, its collider and fall, and where its lights sit. */
 const LAMP_KINDS = {
-  lampDouble: { range: 520, radius: 0.2, height: 10, breakable: true, footprint: 0.35, glows: [[-3.35, 9.7, 0], [3.35, 9.7, 0]], color: 0xffdcae, size: 3.4, shadow: true },
-  lampSingle: { range: 420, radius: 0.16, height: 8.8, breakable: true, footprint: 0.3, glows: [[0, 8.45, 2.65]], color: 0xffd9a0, size: 3.1, shadow: true },
-  lampLantern: { range: 320, radius: 0.18, height: 4.9, breakable: true, footprint: 0.3, glows: [[0, 4.2, 0]], color: 0xffb35c, size: 2.2, flicker: 0.06, shadow: false },
-  lampLanternDouble: { range: 480, radius: 0.2, height: 5.2, breakable: true, footprint: 0.35, glows: [[-0.9, 3.85, 0], [0.9, 3.85, 0]], color: 0xffb35c, size: 2.3, flicker: 0.05, shadow: false },
-  lampMast: { range: 1100, radius: 0.45, height: 21, breakable: false, footprint: 0.7, glows: [[0, 19.6, 0]], color: 0xfff0d8, size: 9, shadow: false },
+  lampDouble: { range: 520, radius: 0.2, height: 10, footprint: 0.35, glows: [[-3.35, 9.7, 0], [3.35, 9.7, 0]], color: 0xffdcae, size: 3.4, shadow: true },
+  lampSingle: { range: 420, radius: 0.16, height: 8.8, footprint: 0.3, glows: [[0, 8.45, 2.65]], color: 0xffd9a0, size: 3.1, shadow: true },
+  lampLantern: { range: 320, radius: 0.18, height: 4.9, footprint: 0.3, glows: [[0, 4.2, 0]], color: 0xffb35c, size: 2.2, flicker: 0.06, shadow: false },
+  lampLanternDouble: { range: 480, radius: 0.2, height: 5.2, footprint: 0.35, glows: [[-0.9, 3.85, 0], [0.9, 3.85, 0]], color: 0xffb35c, size: 2.3, flicker: 0.05, shadow: false },
+  lampMast: { range: 1100, radius: 0.45, height: 21, footprint: 0.7, glows: [[0, 19.6, 0]], color: 0xfff0d8, size: 9, shadow: false },
 };
 
 /**
@@ -33,32 +34,28 @@ export function createStreetLamps(game, kit) {
   const lists = { lampDouble: [], lampSingle: [], lampLantern: [], lampLanternDouble: [], lampMast: [] };
   const point = { x: 0, z: 0, heading: 0 };
 
+  const palmStep = palmSpacingAlongRoad('boulevard');
   for (const run of map.medianRuns) {
     const lantern = run.name === 'Lantern Row';
     const length = run.to - run.from;
-    const count = Math.floor(length / 18);
-    const start = run.from + (length - count * 18) / 2;
-    for (let along = start + 9; along < run.to - 2; along += 36) {
+    const count = Math.floor(length / palmStep);
+    const start = run.from + (length - count * palmStep) / 2;
+    for (let along = start + palmStep / 2; along < run.to - 2; along += palmStep * 2) {
       map.medianPoint(run, along, point);
       placeLamp(lantern ? 'lampLanternDouble' : 'lampDouble', point.x, point.z, run.alongX ? Math.PI / 2 : 0, 0.7);
     }
   }
 
   for (const run of map.sidewalkRuns) {
-    const district = run.district ? run.district.id : '';
+    const style = lampStyleForDistrict(run.district ? run.district.id : '', run.kind, run.name);
+    if (!style) continue;
     if (run.name === 'The Corniche') {
-      if (run.side < 0) lampsAlong(run, 'lampLantern', 13, 36, 0.9);
-      continue;
-    }
-    if (run.kind === 'boulevard') {
-      if (run.name === 'Lantern Row') lampsAlong(run, 'lampLantern', run.side > 0 ? 21 : 6, 30, 0.8);
-      continue;
-    }
-    if (run.kind !== 'street') continue;
-    if (district === 'oldsarab') lampsAlong(run, 'lampLantern', run.side > 0 ? 15 : 3, 26, 0.7);
-    else if (district === 'docks') {
-      if (run.side > 0) lampsAlong(run, 'lampMast', 20, 70, 1.6, 1.4);
-    } else lampsAlong(run, 'lampSingle', run.side > 0 ? 18 : 2, 32, 0.65);
+      if (run.side < 0) lampsAlong(run, style, 13, 36, 0.9);
+    } else if (run.name === 'Lantern Row') lampsAlong(run, style, run.side > 0 ? 21 : 6, 30, 0.8);
+    else if (style === 'lampLantern') lampsAlong(run, style, run.side > 0 ? 15 : 3, 26, 0.7);
+    else if (style === 'lampMast') {
+      if (run.side > 0) lampsAlong(run, style, 20, 70, 1.6, 1.4);
+    } else lampsAlong(run, style, run.side > 0 ? 18 : 2, 32, 0.65);
   }
 
   // Masts over the container yards and truck yards, and a row along the port quay.
@@ -91,8 +88,9 @@ export function createStreetLamps(game, kit) {
     const spec = LAMP_KINDS[kind];
     const y = kit.ground(x, z);
     const record = createPropRecord({ kind, x, y, z, yaw, footprint: spec.footprint });
-    record.def = { fall: 'topple', height: spec.height, sparks: true };
-    kit.addCollider(record, { type: 'post', x, z, radius: spec.radius, y0: y, y1: y + spec.height, kind: 'lamp', breakable: spec.breakable });
+    const fall = propBreaksUnderImpact(kind);
+    record.def = { fall, height: spec.height };
+    kit.addCollider(record, { type: 'post', x, z, radius: spec.radius, y0: y, y1: y + spec.height, kind: 'lamp', breakable: fall !== 'solid' });
     const cos = Math.cos(yaw);
     const sin = Math.sin(yaw);
     kit.addGlows(record, spec.glows.map(([lx, ly, lz]) => ({

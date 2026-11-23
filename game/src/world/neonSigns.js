@@ -2,6 +2,7 @@
 // corporate crowns of The Spires, the faded painted boards of Southgate and the docks, and the
 // names of the landmarks. Each sign is painted once into the facade atlas and hung on buildings
 // as a board on a wall, a blade sticking out over the pavement, or a rooftop sign on posts.
+import { signNameForLanternRow } from './districtArchitectureStyles.js';
 
 /**
  * Every sign in the city. style: 'neon' | 'corporate' | 'civic' | 'painted' | 'hand'.
@@ -9,25 +10,25 @@
  * group says where a sign is hung: 'lantern', 'spires', 'southgate', 'docks' or a landmark id.
  */
 export const SIGN_CATALOG = [
-  // Lantern Row: hotels, clubs and bars
-  { id: 'clubSimoom', text: 'CLUB SIMOOM', style: 'neon', board: '#1c1026', ink: '#ffb8f0', glow: '#ff3fc8', group: 'lantern' },
-  { id: 'hotelQamar', text: 'HOTEL QAMAR', style: 'neon', board: '#0e1b2a', ink: '#c8fbff', glow: '#3ee8ff', group: 'lantern' },
-  { id: 'brassFalcon', text: 'THE BRASS FALCON', style: 'neon', board: '#22160c', ink: '#ffe6a8', glow: '#ffb627', group: 'lantern' },
-  { id: 'nightjar', text: 'NIGHTJAR LOUNGE', style: 'neon', board: '#160f2a', ink: '#e0ccff', glow: '#9d5cff', group: 'lantern' },
-  { id: 'velvetCaravan', text: 'VELVET CARAVAN', style: 'neon', board: '#260c18', ink: '#ffc4d8', glow: '#ff4f8b', group: 'lantern' },
-  { id: 'hotelLumen', text: 'HOTEL LUMEN', style: 'neon', board: '#101820', ink: '#f0f8ff', glow: '#a8d8ff', group: 'lantern' },
-  { id: 'coralRoom', text: 'THE CORAL ROOM', style: 'neon', board: '#200c0a', ink: '#ffd0c0', glow: '#ff6a3d', group: 'lantern' },
-  { id: 'saffronSky', text: 'SAFFRON SKY HOTEL', style: 'neon', board: '#1e1208', ink: '#ffe0b0', glow: '#ff9a1f', group: 'lantern' },
-  { id: 'neonDhow', text: 'THE NEON DHOW', style: 'neon', board: '#081a1e', ink: '#c0fff4', glow: '#22f0c8', group: 'lantern' },
-  { id: 'stardune', text: 'STARDUNE CLUB', style: 'neon', board: '#140c24', ink: '#f0d0ff', glow: '#d24dff', group: 'lantern' },
-  { id: 'hotelAzura', text: 'HOTEL AZURA', style: 'neon', board: '#081428', ink: '#cce0ff', glow: '#3d7bff', group: 'lantern' },
-  { id: 'oasisNights', text: 'OASIS NIGHTS', style: 'neon', board: '#0a1c10', ink: '#d0ffd8', glow: '#3dff7a', group: 'lantern' },
-  { id: 'goldenScarab', text: 'GOLDEN SCARAB', style: 'neon', board: '#1c1406', ink: '#fff0b8', glow: '#ffd23d', group: 'lantern' },
-  { id: 'moonwell', text: 'MOONWELL HOTEL', style: 'neon', board: '#0c1424', ink: '#e8f0ff', glow: '#b8c8ff', group: 'lantern' },
-  { id: 'jinnTonic', text: 'JINN & TONIC', style: 'neon', board: '#061a1a', ink: '#c8fff0', glow: '#3dffd8', group: 'lantern' },
-  { id: 'khamsinBar', text: 'KHAMSIN BAR', style: 'neon', board: '#1e0a06', ink: '#ffd0b0', glow: '#ff4a1f', group: 'lantern' },
-  { id: 'palmPearl', text: 'PALM & PEARL', style: 'neon', board: '#14101e', ink: '#fff0fa', glow: '#ff8ad8', group: 'lantern' },
-  { id: 'fataMorgana', text: 'CLUB FATA MORGANA', style: 'neon', board: '#1a0a22', ink: '#ffd8ff', glow: '#e040ff', group: 'lantern' },
+  // Lantern Row: hotels, clubs and bars (their names are kept in districtArchitectureStyles.js)
+  lanternNeon(0, 'clubSimoom', '#1c1026', '#ffb8f0', '#ff3fc8'),
+  lanternNeon(1, 'hotelQamar', '#0e1b2a', '#c8fbff', '#3ee8ff'),
+  lanternNeon(2, 'brassFalcon', '#22160c', '#ffe6a8', '#ffb627'),
+  lanternNeon(3, 'nightjar', '#160f2a', '#e0ccff', '#9d5cff'),
+  lanternNeon(4, 'velvetCaravan', '#260c18', '#ffc4d8', '#ff4f8b'),
+  lanternNeon(5, 'hotelLumen', '#101820', '#f0f8ff', '#a8d8ff'),
+  lanternNeon(6, 'coralRoom', '#200c0a', '#ffd0c0', '#ff6a3d'),
+  lanternNeon(7, 'saffronSky', '#1e1208', '#ffe0b0', '#ff9a1f'),
+  lanternNeon(8, 'neonDhow', '#081a1e', '#c0fff4', '#22f0c8'),
+  lanternNeon(9, 'stardune', '#140c24', '#f0d0ff', '#d24dff'),
+  lanternNeon(10, 'hotelAzura', '#081428', '#cce0ff', '#3d7bff'),
+  lanternNeon(11, 'oasisNights', '#0a1c10', '#d0ffd8', '#3dff7a'),
+  lanternNeon(12, 'goldenScarab', '#1c1406', '#fff0b8', '#ffd23d'),
+  lanternNeon(13, 'moonwell', '#0c1424', '#e8f0ff', '#b8c8ff'),
+  lanternNeon(14, 'jinnTonic', '#061a1a', '#c8fff0', '#3dffd8'),
+  lanternNeon(15, 'khamsinBar', '#1e0a06', '#ffd0b0', '#ff4a1f'),
+  lanternNeon(16, 'palmPearl', '#14101e', '#fff0fa', '#ff8ad8'),
+  lanternNeon(17, 'fataMorgana', '#1a0a22', '#ffd8ff', '#e040ff'),
   // The Spires: the names on the crowns of the towers
   { id: 'oryxBank', text: 'ORYX BANK', style: 'corporate', board: '#1d262c', ink: '#f4f4f0', glow: '#ffffff', group: 'spires' },
   { id: 'najmTelecom', text: 'NAJM TELECOM', style: 'corporate', board: '#0f2a2c', ink: '#9ff5ec', glow: '#40f0e0', group: 'spires' },
@@ -50,6 +51,11 @@ export const SIGN_CATALOG = [
   { id: 'minaLogistics', text: 'MINA LOGISTICS', style: 'painted', board: '#1f4f6e', ink: '#f4f4ee', glow: false, group: 'docks' },
   { id: 'sarabShipping', text: 'SARAB SHIPPING CO.', style: 'painted', board: '#a8402e', ink: '#fff4e0', glow: false, group: 'docks' },
 ];
+
+/** A Lantern Row neon sign: the index-th name of the strip on a dark board, in its own colours. */
+function lanternNeon(index, id, board, ink, glow) {
+  return { id, text: signNameForLanternRow(index), style: 'neon', board, ink, glow, group: 'lantern' };
+}
 
 /** The ids of the signs hung in one group, in catalogue order. */
 export function signsOfGroup(group) {

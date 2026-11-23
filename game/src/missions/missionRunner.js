@@ -1,16 +1,13 @@
-// The job board of Port Sarab: registers the story's jobs, decides which are on offer, puts a lettered
-// blip on each offered contact and stands the giver there, offers the job when Zayd walks up, runs its
-// script, pays out on success, and on failure offers a quick retry from the last checkpoint. Fails the
-// job when Zayd is knocked out or arrested; saves and loads progress. Becomes game.missions.
+// The job board of Port Sarab: registers the story's jobs, decides which are on offer (the story
+// outline), shows them at their contacts, runs a job's script when Zayd takes it, pays out on success,
+// and on failure offers a quick retry from the last checkpoint. Fails the job when Zayd is knocked out
+// or arrested; saves and loads progress. Becomes game.missions.
 import { JOB_LIST } from './jobList.js';
 import { createJobRun } from './jobContext.js';
+import { createJobContacts } from './jobContacts.js';
 import { isJobEnded } from './jobWaits.js';
+import { jobsOnOffer, nextJobAfter, rewardForJob, jobIsFinale, STORY_JOBS } from './storyJobOutline.js';
 
-/** Metres at which a giver appears at their contact, and beyond which they leave again. */
-const GIVER_APPEARS = 120;
-const GIVER_LEAVES = 160;
-/** Metres from the giver at which the job is offered (on foot). */
-const TALK_DISTANCE = 3;
 /** Seconds the quick retry stays on offer after a failure. */
 const RETRY_SECONDS = 15;
 /** Leftovers of a finished job vanish once the player is this far away, or after this long. */
@@ -26,14 +23,23 @@ const LEFTOVER_SECONDS = 150;
 export function createMissionRunner(game) {
   const jobs = JOB_LIST.filter(isUsableJob).slice().sort((a, b) => (a.order || 99) - (b.order || 99));
   const jobById = new Map(jobs.map((job) => [job.id, job]));
+  const outlineIds = new Set(STORY_JOBS.map((entry) => entry.id));
+  warnWhereJobsDisagreeWithOutline(jobs);
   const completed = new Set();
-  /** One post per contact place: where a giver stands and a blip marks the job on offer. */
-  const posts = new Map();
   const leftovers = [];
   let run = null;
   let retry = null;
   let guide = null;
   let refreshIn = 0;
+  const contacts = createJobContacts(game, {
+    isBusy: () => run !== null,
+    isRetrying: () => retry !== null,
+    start: (id) => start(id),
+    guide: () => guide,
+    clearGuide: () => {
+      guide = null;
+    },
+  });
 
   const missions = {
     /** The running job as the HUD reads it: {id, title, giver, objectives, timer, counter}, or null. */
@@ -50,7 +56,7 @@ export function createMissionRunner(game) {
       return completed.size;
     },
     get total() {
-      return jobs.length;
+      return Math.max(STORY_JOBS.length, jobs.length);
     },
     log,
     available,
@@ -79,19 +85,18 @@ export function createMissionRunner(game) {
     retry = null;
     setHint('', '');
     if (guide === id) guide = null;
-    const post = postOfJob(job);
     const thisRun = createJobRun(game, job, {
       resumeFrom: options.resumeFrom || null,
-      giver: () => (post && !post.adopted ? post.giver : null),
+      giver: () => contacts.giverOf(job),
       fail: (failing, reason) => finish(failing, 'failed', reason),
       scriptError: reportScriptError,
-      adoptCast,
-      keepCast,
+      adoptCast: (castId) => contacts.adoptCast(castId) || adoptLeftover(castId),
+      keepCast: (person) => contacts.keepCast(person),
       leftover: (entity) => leftovers.push({ entity, age: 0 }),
     });
     run = thisRun;
     missions.active = thisRun.view;
-    hidePosts(post);
+    contacts.hideAllBut(job);
     game.events.emit('mission:started', { mission: thisRun.view, resumeFrom: thisRun.resumeFrom });
     Promise.resolve()
       .then(() => job.run(thisRun.m))
@@ -110,7 +115,8 @@ export function createMissionRunner(game) {
     if (reason === 'load' || reason === 'newGame') {
       retry = null;
       clearLeftovers();
-      clearPosts();
+      contacts.clear();
+      refreshIn = 0;
     }
     if (!run) return false;
     const ending = run;
@@ -136,11 +142,11 @@ export function createMissionRunner(game) {
     run = null;
     missions.active = null;
     completed.add(job.id);
-    const reward = job.reward || {};
+    const reward = job.reward || rewardForJob(job.id) || {};
     const economy = game.economy;
     if (economy && reward.money) economy.addMoney(reward.money, `Job: ${job.title}`);
     if (economy && reward.rep) economy.addRep?.(reward.rep, job.title);
-    game.events.emit('mission:completed', { mission: ending.view, reward });
+    game.events.emit('mission:completed', { mission: ending.view, reward, finale: jobIsFinale(job.id) });
     if (!game.menus) game.events.emit('notify', { text: `${job.title}: done${reward.money ? `  +$${reward.money.toLocaleString('en-US')}` : ''}`, kind: 'cash', seconds: 6 });
     for (const call of ending.afterCalls) {
       if (game.phone && typeof game.phone.schedule === 'function') game.phone.schedule(call.castId, call.lines, call.delay);
@@ -149,6 +155,7 @@ export function createMissionRunner(game) {
     refreshIn = 0;
   }
 
+  /** The job is blown: clear it away, tell everyone, and offer the quick retry. */
   function finish(ending, outcome, reason) {
     if (ending.ended) return;
     ending.end(outcome, reason);
@@ -168,31 +175,59 @@ export function createMissionRunner(game) {
     finish(failing, 'failed', 'Something went wrong');
   }
 
-  /** Every frame: the running job, the retry offer, the posts and their givers, the leftovers. */
+  /** Every frame: the running job, the retry offer, the contacts and their givers, the leftovers. */
   function update(dt) {
     if (run) run.update(dt);
     updateRetry(dt);
     refreshIn -= dt;
     if (refreshIn <= 0) {
       refreshIn = 0.5;
-      refreshPosts();
+      contacts.refresh(currentOffers());
     }
-    updatePosts(dt);
+    contacts.update(dt);
     updateLeftovers(dt);
   }
 
   // ---- What is on offer ------------------------------------------------------------------------
 
-  /** The jobs that could be taken now: not done, their requirements done, within their hours. */
+  /**
+   * The jobs that could be taken now. The story outline decides for its ten jobs (done, requirements
+   * done, open at this hour); a loaded job the outline does not know goes by its own requirements.
+   */
   function available() {
     const hour = game.time.hour;
-    return jobs.filter((job) => !completed.has(job.id) && (job.requires || []).every((id) => completed.has(id)) && withinHours(job.hours, hour) && placeOf(job.contact));
+    const offered = [];
+    for (const entry of jobsOnOffer(Array.from(completed), hour)) {
+      const job = jobById.get(entry.id);
+      if (job && placeOf(job.contact)) offered.push(job);
+    }
+    for (const job of jobs) {
+      if (outlineIds.has(job.id) || completed.has(job.id) || !placeOf(job.contact)) continue;
+      if ((job.requires || []).every((id) => completed.has(id)) && withinHours(job.hours, hour)) offered.push(job);
+    }
+    return offered;
   }
 
-  /** The story so far, for the pause menu. */
+  /** contact place id -> the first job on offer there (nothing while a job runs). */
+  function currentOffers() {
+    const offers = new Map();
+    if (run) return offers;
+    for (const job of available()) if (!offers.has(job.contact)) offers.set(job.contact, job);
+    return offers;
+  }
+
+  /** The story so far for the pause menu: all ten jobs in order, done or not, with their briefings. */
   function log() {
     const open = new Set(available().map((job) => job.id));
-    return jobs.map((job) => ({ id: job.id, order: job.order, title: job.title, giver: job.giver, done: completed.has(job.id), available: open.has(job.id), briefing: job.briefing || '' }));
+    const entries = STORY_JOBS.map((entry) => {
+      const job = jobById.get(entry.id);
+      const next = nextJobAfter(entry.id);
+      return { id: entry.id, order: entry.order, title: entry.title, giver: entry.giver, done: completed.has(entry.id), available: open.has(entry.id), briefing: job ? job.briefing || '' : '', next: next ? next.id : null, finale: jobIsFinale(entry.id) };
+    });
+    for (const job of jobs) {
+      if (!outlineIds.has(job.id)) entries.push({ id: job.id, order: job.order, title: job.title, giver: job.giver, done: completed.has(job.id), available: open.has(job.id), briefing: job.briefing || '', next: null, finale: false });
+    }
+    return entries;
   }
 
   /** Put the GPS on a job's contact until the player gets there (the new-game hint). */
@@ -209,206 +244,6 @@ export function createMissionRunner(game) {
     guide = null;
     setHint('', '');
     refreshIn = 0;
-  }
-
-  /** Which job each contact offers now; blips added, changed or removed to match. */
-  function refreshPosts() {
-    const offers = new Map();
-    if (!run) {
-      for (const job of available()) {
-        if (!offers.has(job.contact)) offers.set(job.contact, job);
-      }
-    }
-    for (const [placeId, job] of offers) {
-      const post = postAt(placeId, job.giver);
-      if (!post) continue;
-      if (post.job !== job) {
-        post.job = job;
-        post.greeted = false;
-        removeMarker(post);
-      }
-      if (!post.marker) post.marker = addContactMarker(post, job);
-      const wantRoute = guide === job.id;
-      if (post.marker.route !== wantRoute) post.marker.route = wantRoute;
-    }
-    for (const post of posts.values()) {
-      if (offers.has(post.place.id)) continue;
-      post.job = null;
-      removeMarker(post);
-    }
-  }
-
-  /** Givers appear when the player comes near, idle, greet him, and offer the job when he walks up. */
-  function updatePosts(dt) {
-    const player = game.player;
-    if (!player || !player.character) return;
-    const pos = player.pos;
-    for (const post of posts.values()) {
-      const place = post.place;
-      const d = Math.hypot(pos.x - place.x, pos.z - place.z);
-      if (post.active && !run) post.active = false;
-      const wanted = post.job !== null || post.returned || post.active;
-      if (!post.giver && wanted && !post.adopted && d < GIVER_APPEARS && game.story && game.characters) {
-        post.giver = game.story.spawnCast(post.castId, place.x, place.z, place.heading + Math.PI);
-        if (post.giver) post.giver.ai = { mission: true, owner: 'contact', mode: 'idle' };
-      }
-      if (post.giver && (post.giver.alive === false || post.giver.despawned)) post.giver = null;
-      if (post.giver && !post.adopted && (d > GIVER_LEAVES || (!wanted && d > 60))) {
-        despawnPerson(post.giver);
-        post.giver = null;
-        post.returned = false;
-      }
-      if (post.giver && !post.adopted) idleGiver(post, d, dt);
-      if (!run && post.job && d < 15 && guide === post.job.id) guide = null;
-      if (!run && post.job && !retry) offerJob(post, player, d);
-    }
-  }
-
-  function idleGiver(post, distance, dt) {
-    const giver = post.giver;
-    const intent = giver.intent;
-    const place = post.place;
-    intent.moveX = 0;
-    intent.moveZ = 0;
-    intent.fire = false;
-    intent.aim = false;
-    const player = game.player;
-    if (distance < 12 && player.state !== 'down') {
-      intent.faceYaw = Math.atan2(player.pos.x - giver.pos.x, player.pos.z - giver.pos.z);
-      post.waveFor = post.greeted ? Math.max(0, (post.waveFor || 0) - dt) : 1.6;
-      intent.gesture = post.waveFor > 0 ? 'wave' : distance < 5 ? 'talk' : null;
-      if (!post.greeted && post.job) greet(post);
-      post.greeted = true;
-    } else {
-      intent.faceYaw = place.heading + Math.PI;
-      intent.gesture = IDLE_GESTURE[post.castId] || null;
-      if (distance > 30) post.greeted = false;
-    }
-  }
-
-  /** A line when the player first comes near a giver with work. */
-  function greet(post) {
-    const wantedLevel = game.wanted ? game.wanted.level || 0 : 0;
-    const lines = wantedLevel > 0 ? WANTED_REBUFF[post.castId] : GREETINGS[post.castId];
-    if (lines && game.story) game.story.say([lines[Math.floor(Math.random() * lines.length)]], 'contact');
-  }
-
-  function offerJob(post, player, distance) {
-    if (player.vehicle || player.state !== 'onFoot' || game.mode !== 'playing') return;
-    const giver = post.giver;
-    const near = giver ? Math.hypot(player.pos.x - giver.pos.x, player.pos.z - giver.pos.z) : distance;
-    if (near > TALK_DISTANCE) return;
-    if (game.wanted && game.wanted.level > 0) return;
-    const name = speakerName(post.castId);
-    game.prompts?.offer?.(30, 'E', `${name}: "${post.job.title}"`);
-    if (game.input.pressed('interact')) start(post.job.id);
-  }
-
-  /** While a job runs, the other contacts hide; the running job's giver keeps standing. */
-  function hidePosts(keep) {
-    for (const post of posts.values()) {
-      removeMarker(post);
-      post.job = null;
-      post.active = post === keep;
-      if (post !== keep && post.giver && !post.adopted) {
-        despawnPerson(post.giver);
-        post.giver = null;
-        post.returned = false;
-      }
-    }
-  }
-
-  function clearPosts() {
-    for (const post of posts.values()) {
-      removeMarker(post);
-      if (post.giver) despawnPerson(post.giver);
-      post.giver = null;
-      post.job = null;
-      post.adopted = false;
-      post.returned = false;
-    }
-    refreshIn = 0;
-  }
-
-  /** The post at a contact place, made on first use. */
-  function postAt(placeId, castId) {
-    let post = posts.get(placeId);
-    if (post) return post;
-    const place = placeOf(placeId);
-    if (!place) return null;
-    post = { place, castId: place.person || castId, job: null, marker: null, giver: null, adopted: false, returned: false, active: false, greeted: false, waveFor: 0 };
-    posts.set(placeId, post);
-    return post;
-  }
-
-  function postOfJob(job) {
-    return posts.get(job.contact) || null;
-  }
-
-  function addContactMarker(post, job) {
-    if (!game.markers) return { route: false };
-    const place = post.place;
-    const who = game.story && game.story.speaker ? game.story.speaker(post.castId) : { name: post.castId, color: '#e9b44c' };
-    const name = who.name || post.castId;
-    return game.markers.add({
-      kind: 'contact',
-      letter: place.letter || name.charAt(0).toUpperCase(),
-      pos: { x: place.x, y: game.terrain ? game.terrain.heightAt(place.x, place.z) : 0, z: place.z },
-      label: `${name}: ${job.title}`,
-      hint: job.hint || `${name} has work: "${job.title}"`,
-      color: hexColor(who.color, 0xe9b44c),
-      beacon: true,
-      radius: 1.4,
-      route: guide === job.id,
-      edge: true,
-      owner: 'contacts',
-      jobId: job.id,
-    });
-  }
-
-  function removeMarker(post) {
-    if (post.marker && game.markers) game.markers.remove(post.marker);
-    post.marker = null;
-  }
-
-  // ---- Cast members moving between the posts and the running job --------------------------------
-
-  /** A job asks for a cast member: hand over the one standing at a post (or left over) if any. */
-  function adoptCast(castId) {
-    for (const post of posts.values()) {
-      if (post.giver && post.castId === castId && !post.adopted) {
-        const person = post.giver;
-        post.giver = null;
-        post.adopted = true;
-        post.returned = false;
-        return person;
-      }
-    }
-    for (let i = 0; i < leftovers.length; i += 1) {
-      const entity = leftovers[i].entity;
-      if (entity.tags && entity.tags.castId === castId && entity.alive !== false && !entity.despawned) {
-        leftovers.splice(i, 1);
-        return entity;
-      }
-    }
-    return null;
-  }
-
-  /** A job has ended: a cast member near their own post goes back to standing there. */
-  function keepCast(person) {
-    const castId = person.tags.castId;
-    if (person.alive === false || person.vehicle) return false;
-    for (const post of posts.values()) {
-      if (post.castId !== castId || (post.giver && post.giver !== person)) continue;
-      if (Math.hypot(person.pos.x - post.place.x, person.pos.z - post.place.z) > 25) continue;
-      post.giver = person;
-      post.adopted = false;
-      post.returned = true;
-      person.ai = { mission: true, owner: 'contact', mode: 'idle' };
-      return true;
-    }
-    for (const post of posts.values()) if (post.castId === castId) post.adopted = false;
-    return false;
   }
 
   // ---- Retry, leftovers, saving ---------------------------------------------------------------
@@ -454,6 +289,7 @@ export function createMissionRunner(game) {
     player.teleport(place.x + Math.sin(out) * 2.6, place.z + Math.cos(out) * 2.6, place.heading);
   }
 
+  /** What a finished job left near the player goes once he has driven off (or after a while). */
   function updateLeftovers(dt) {
     const player = game.player;
     for (let i = leftovers.length - 1; i >= 0; i -= 1) {
@@ -477,28 +313,35 @@ export function createMissionRunner(game) {
     }
   }
 
+  /** A cast member left over from the last job is reused rather than standing in two places. */
+  function adoptLeftover(castId) {
+    for (let i = 0; i < leftovers.length; i += 1) {
+      const entity = leftovers[i].entity;
+      if (entity.tags && entity.tags.castId === castId && entity.alive !== false && !entity.despawned) {
+        leftovers.splice(i, 1);
+        return entity;
+      }
+    }
+    return null;
+  }
+
   function clearLeftovers() {
     for (const item of leftovers.splice(0, leftovers.length)) removeEntity(item.entity);
   }
 
   function removeEntity(entity) {
+    const player = game.player;
     if (entity.spec) {
-      const player = game.player;
       if (player && player.vehicle === entity) return;
       for (const occupant of (entity.passengers || []).concat(entity.driver ? [entity.driver] : [])) {
         if (occupant && !(player && occupant === player.character)) game.characters?.exitVehicle?.(occupant, { instant: true });
       }
       game.vehicles?.despawn?.(entity);
-    } else {
-      despawnPerson(entity);
+    } else if (!entity.despawned) {
+      game.weapons?.ai?.disengage?.(entity);
+      entity.despawned = true;
+      game.characters?.despawn?.(entity);
     }
-  }
-
-  function despawnPerson(person) {
-    if (!person || person.despawned) return;
-    game.weapons?.ai?.disengage?.(person);
-    person.despawned = true;
-    game.characters?.despawn?.(person);
   }
 
   /** Finished jobs, and the job in progress with its checkpoint (offered as a retry after loading). */
@@ -523,11 +366,6 @@ export function createMissionRunner(game) {
     missions.hintTitle = title;
   }
 
-  function speakerName(castId) {
-    const who = game.story && game.story.speaker ? game.story.speaker(castId) : null;
-    return (who && who.name) || castId;
-  }
-
   function placeOf(id) {
     return game.city && game.city.place ? game.city.place(id) : null;
   }
@@ -545,6 +383,23 @@ function isUsableJob(job) {
   return usable;
 }
 
+/** Say once, at start-up, where a loaded job module differs from the story outline. */
+function warnWhereJobsDisagreeWithOutline(jobs) {
+  const notes = [];
+  for (const job of jobs) {
+    const entry = STORY_JOBS.find((item) => item.id === job.id);
+    if (!entry) {
+      notes.push(`${job.id} (not in the outline)`);
+      continue;
+    }
+    for (const field of ['order', 'title', 'giver', 'contact']) if (job[field] !== entry[field]) notes.push(`${job.id}.${field}`);
+    if ((job.requires || []).join(',') !== entry.requires.join(',')) notes.push(`${job.id}.requires`);
+    const reward = job.reward || {};
+    if (reward.money !== entry.reward.money || reward.rep !== entry.reward.rep) notes.push(`${job.id}.reward`);
+  }
+  if (notes.length) console.warn(`missions: job modules disagree with the story outline: ${notes.join(', ')}`);
+}
+
 /** Whether the hour falls in [from, to) of a job's hours (which may wrap past midnight). */
 function withinHours(hours, hour) {
   if (!hours) return true;
@@ -552,28 +407,3 @@ function withinHours(hours, hour) {
   const to = hours[1];
   return from <= to ? hour >= from && hour < to : hour >= from || hour < to;
 }
-
-function hexColor(css, fallback) {
-  if (typeof css === 'number') return css;
-  const value = typeof css === 'string' ? parseInt(css.replace('#', ''), 16) : NaN;
-  return Number.isFinite(value) ? value : fallback;
-}
-
-/** What each giver does while waiting at their contact. */
-const IDLE_GESTURE = { mina: 'phone', tavi: 'phone', faris: null, dahan: 'lean', sayf: null, vane: null };
-
-/** First words when Zayd walks up to a giver with work. */
-const GREETINGS = {
-  faris: [['faris', 'Dust! Come, come. The engines missed you.'], ['faris', 'There he is. Coffee is cold, work is hot.']],
-  mina: [['mina', 'Dust. Perfect timing. I hate perfect timing.'], ['mina', 'Over here. Try to look like a customer.']],
-  tavi: [['tavi', 'Karam. You took your time.'], ['tavi', 'Walk like you belong on a dock.']],
-  dahan: [['dahan', 'Not here. Walk with me.']],
-};
-
-/** What a giver says when Zayd shows up with the police on him. */
-const WANTED_REBUFF = {
-  faris: [['faris', 'Not with sirens on you! Lose them, then come back.']],
-  mina: [['mina', 'You brought the police to my stall? Lose them first.']],
-  tavi: [['tavi', 'Cops on your tail? Get lost. Then get back here.']],
-  dahan: [['dahan', 'Lose the patrol first, Karam.']],
-};

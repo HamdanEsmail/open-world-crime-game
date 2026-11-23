@@ -303,10 +303,10 @@ function placeDesertLandmarks(city) {
     { id: 'airfield', name: 'Sarab Airfield', kind: 'airfield', x: 820, z: 1770, h: 0, w: 60, d: 300 },
     { id: 'airfieldHangar', name: 'Hangar 2', kind: 'hangar', x: 900, z: 1680, h: 14, w: 46, d: 36 },
     { id: 'solarFarm', name: 'Sunfield Solar Array', kind: 'solarFarm', x: 1490, z: 1010, h: 3, w: 280, d: 220 },
-    { id: 'wadiCircuit', name: 'Wadi Circuit Paddock', kind: 'raceway', x: -700, z: 1090, h: 6, w: 50, d: 24 },
+    { id: 'wadiCircuit', name: 'Wadi Circuit Paddock', kind: 'raceway', x: -684, z: 1150, h: 6, w: 50, d: 24 },
     { id: 'shipwreck', name: 'The Rusted Dhow', kind: 'shipwreck', x: -1480, z: -800, h: 8, radius: 14 },
     { id: 'radioMast', name: 'Dune FM Mast', kind: 'mast', x: 420, z: 1560, h: 90, radius: 3 },
-    { id: 'cityGate', name: 'Port Sarab Gate', kind: 'gate', x: 40, z: 900, h: 24, w: 40, d: 6 },
+    { id: 'cityGate', name: 'Port Sarab Gate', kind: 'gate', x: 47, z: 900, h: 24, w: 50, d: 6 },
   );
 }
 
@@ -531,7 +531,7 @@ export const COAST = {
 
 /** Ground that is kept flat among the dunes: [centreX, centreZ, radius]. */
 export const FLAT_ZONES = [
-  [820, 1770, 170], [-1180, 1480, 80], [-420, 1790, 86], [1490, 1010, 190], [-700, 1090, 60], [420, 1560, 30],
+  [820, 1770, 205], [-1180, 1480, 80], [-420, 1790, 86], [1490, 1010, 190], [-690, 1128, 72], [420, 1560, 30],
 ];
 
 /** Stunt ramps: a rectangle of ground that rises along its heading to `height`. */

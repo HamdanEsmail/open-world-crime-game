@@ -1,4 +1,4 @@
-// Port Sarab's radio and sound at a glance: the five stations on the car radio, the 48 sounds the game
+// Port Sarab's radio and sound at a glance: the five stations on the car radio, the 50 sounds the game
 // plays, and the rules giving each car its engine voice, each police unit its siren, each gun its report.
 
 /** The dial, in order. Four stations compose endless original music; the last listens to the police. */
@@ -13,7 +13,7 @@ export const RADIO_STATION_GUIDE = [
 /** Every sound id game.audio.play() knows, grouped. */
 export const SOUND_EFFECT_IDS = {
   gunfire: ['gunPistol', 'gunSmg', 'gunRifle', 'gunShotgun', 'bulletImpact', 'ricochet', 'bulletWhiz'],
-  fights: ['punch', 'kick', 'bodyFall', 'bodyHit'],
+  fights: ['punch', 'kick', 'bodyFall', 'bodyHit', 'scream', 'shout'],
   wrecks: ['crash', 'glass', 'explosion', 'tyreBurst', 'metalClank', 'woodCrack', 'landingThud'],
   cars: ['horn', 'doorOpen', 'doorClose', 'engineStart', 'engineStop', 'backfire'],
   outdoors: ['splash', 'footstep', 'windGust'],
@@ -36,12 +36,12 @@ export function engineTimbreForVehicleClass(className) {
   return className === 'taxi' ? 'sedan' : className === 'policeSuv' ? 'police' : className || 'sedan';
 }
 
-/** Heavy diesels crank longer and rumble lower. */
+/** Heavy diesels crank longer, rumble lower. */
 export function isDieselClass(className) {
   return className === 'truck' || className === 'bus' || className === 'armored';
 }
 
-/** The sweep police unit `n` plays at its `turn`-th change, so no two units sound alike. */
+/** Unit `n`'s siren sweep at its `turn`-th change; no two units sound alike. */
 export function sirenPatternForUnit(n, turn) {
   const cycle = SIREN_CYCLES[n % SIREN_CYCLES.length];
   return cycle[turn % cycle.length];

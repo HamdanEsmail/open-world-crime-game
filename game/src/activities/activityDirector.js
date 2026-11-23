@@ -12,7 +12,7 @@ import { createCollectibleFalcons } from './collectibleFalcons.js';
 /**
  * Build game.activities.
  * @returns {Object} { active, running, races, taxi, courier, exports, stunts, falcons, canStart(), begin(module, card),
- *   complete(module, result), fail(module, reason), payout(result), cancel(reason), update(dt), serialize(), deserialize(data),
+ *   complete(module, result), fail(module, reason), payout(result), cancel(reason), update(dt), serialize(), deserialize(data), reset(),
  *   offer(priority, keyLabel, text) -> pressed, kerbPose(place), playerVehicle(), say(), toast(), banner(), money(n), clock(s) }
  */
 export function createActivities(game) {
@@ -40,6 +40,7 @@ export function createActivities(game) {
     update,
     serialize,
     deserialize,
+    reset,
     offer,
     kerbPose,
     playerVehicle,
@@ -198,6 +199,12 @@ export function createActivities(game) {
   /** A big centred line for a moment: a countdown digit, STUNT JUMP, a finish time. */
   function banner(text, sub, kind, seconds) {
     game.events.emit('activity:banner', { text, sub: sub || '', kind: kind || 'info', seconds: seconds || 2.5 });
+  }
+
+  /** A new game: nothing running, every record, list, jump and falcon back to the start. */
+  function reset() {
+    cancel(null);
+    for (const module of modules) module.deserialize(null);
   }
 
   /** Progress of every activity, for the save. */

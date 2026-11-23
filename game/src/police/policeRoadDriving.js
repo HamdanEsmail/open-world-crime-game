@@ -42,12 +42,13 @@ export function createPoliceRoadDriving(game) {
     if (!roads || !roads.findRoute || routeBudget <= 0) return false;
     routeBudget -= 1;
     const route = roads.findRoute(fromX, fromZ, toX, toZ);
-    const n = Math.min(route.length, ROUTE_CAPACITY);
+    let n = Math.min(route.length, ROUTE_CAPACITY);
     for (let i = 0; i < n; i += 1) {
       const source = i === n - 1 ? route[route.length - 1] : route[i];
       rawX[i] = source.x;
       rawZ[i] = source.z;
     }
+    n = dropDoublingBack(rawX, rawZ, n);
     // Keep right: each road of the route is shifted to the middle of its right-hand lanes (clear of
     // a boulevard's median), and each corner moves to where two shifted roads cross. The last point
     // is the target itself and stays where it is.
@@ -250,6 +251,30 @@ function cornerApproachSpeed(turn, distance) {
   const radius = turn < 0 ? 2.5 + 4.5 / sharp : 6 + 14 / sharp;
   const through = Math.sqrt(CORNER_GRIP * radius);
   return Math.sqrt(through * through + 2 * CORNER_BRAKING * Math.max(0, distance - 3));
+}
+
+/**
+ * Take out corners where a route runs to a junction only to come straight back along the same road
+ * (a car just past a junction must not drive back to it and turn round). Returns the new length.
+ */
+function dropDoublingBack(X, Z, n) {
+  let count = n;
+  for (let i = 1; i < count - 1; i += 1) {
+    const ux = X[i] - X[i - 1];
+    const uz = Z[i] - Z[i - 1];
+    const vx = X[i + 1] - X[i];
+    const vz = Z[i + 1] - Z[i];
+    const lu = Math.sqrt(ux * ux + uz * uz);
+    const lv = Math.sqrt(vx * vx + vz * vz);
+    if (lu < 1e-3 || lv < 1e-3 || (ux * vx + uz * vz) / (lu * lv) > -0.95) continue;
+    for (let k = i; k < count - 1; k += 1) {
+      X[k] = X[k + 1];
+      Z[k] = Z[k + 1];
+    }
+    count -= 1;
+    i = Math.max(0, i - 2);
+  }
+  return count;
 }
 
 /** A patrol's choice at the next junction: mostly straight on, sometimes a turn. */

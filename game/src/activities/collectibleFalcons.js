@@ -27,7 +27,7 @@ export function createCollectibleFalcons(game, activities) {
 
   const mesh = new THREE.InstancedMesh(
     buildGoldenFalconGeometry(),
-    new THREE.MeshPhongMaterial({ vertexColors: true, specular: 0xfff1b8, shininess: 70, emissive: 0x3a2400 }),
+    new THREE.MeshPhongMaterial({ vertexColors: true, specular: 0xfff4c8, shininess: 90, emissive: 0x4a3200 }),
     Math.max(1, count),
   );
   mesh.castShadow = true;
@@ -185,7 +185,7 @@ function createFalconGlints(falcons) {
   const visible = new Float32Array(count);
   for (let i = 0; i < falcons.length; i += 1) {
     positions[i * 3] = falcons[i].x;
-    positions[i * 3 + 1] = falcons[i].y + 1.05;
+    positions[i * 3 + 1] = falcons[i].y + 1.4;
     positions[i * 3 + 2] = falcons[i].z;
     phases[i] = falcons[i].phase * 3.7;
     visible[i] = 1;

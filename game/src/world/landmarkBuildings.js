@@ -5,9 +5,11 @@ import { rectPoints, ellipsePoints, faceOf } from './buildingGeometryBuilder.js'
 import { parapetRoof, plantRoom, airConUnits, helipad, antennaMast, windTower, roofDome, waterTanks } from './rooftopDetails.js';
 import { hangWallSign } from './neonSigns.js';
 import { raiseVaneSpire } from './landmarkVaneSpire.js';
+import { LANDMARK_BUILDINGS } from './districtArchitectureStyles.js';
+import { mixHex } from './buildingShapes.js';
 
 /** The plan styles drawn here rather than by the ordinary district shapes. */
-export const LANDMARK_STYLES = new Set(['vaneSpire', 'policeHQ', 'policeGarage', 'hospital', 'soukHall', 'clockTower', 'grandHotel', 'garage', 'yachtClub', 'customsHouse']);
+export const LANDMARK_STYLES = new Set(Object.keys(LANDMARK_BUILDINGS));
 
 /** Raise one landmark building of the plan. */
 export function raiseLandmarkBuilding(ctx, building) {
@@ -526,11 +528,4 @@ function raiseCustomsHouse(ctx, building) {
   roofDome(b, tx, tz, h + 8, 4.6, stone, true);
   hangWallSign(b, front, 'customsHouse', 5.4, 20, 2.2, front.length * 0.22, 0.12);
   hangWallSign(b, front, 'customsHouse', 5.4, 20, 2.2, front.length * 0.78, 0.12);
-}
-
-function mixHex(a, b, t) {
-  const r = Math.round(((a >> 16) & 255) * (1 - t) + ((b >> 16) & 255) * t);
-  const g = Math.round(((a >> 8) & 255) * (1 - t) + ((b >> 8) & 255) * t);
-  const bl = Math.round((a & 255) * (1 - t) + (b & 255) * t);
-  return (r << 16) | (g << 8) | bl;
 }

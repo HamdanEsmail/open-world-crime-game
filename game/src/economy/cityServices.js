@@ -8,7 +8,7 @@ const CAB_PACE = 12;
 const FINE_PER_STAR = 500;
 
 /**
- * Build game.services.
+ * Build game.cityServices.
  * @returns {{update(dt:number):void, hailCab(cab:Object):boolean, payFine(station:Object):boolean, cabFareTo(x:number, z:number):number, riding:boolean}}
  */
 export function createCityServices(game) {

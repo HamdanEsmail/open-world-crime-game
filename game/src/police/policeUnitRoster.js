@@ -318,7 +318,7 @@ function createDriveMemory() {
     obstacleTimer: Math.random() * 0.15, obstacleBrake: 0, dodge: 0, dodgeUntil: 0,
     progressX: 0, progressZ: 0, progressTimer: 0, wantsMove: true,
     recoverUntil: 0, recoverSteer: 1, resumeState: 'responding',
-    pitUntil: 0, pitCooldown: 0, pitSteer: 0, swipeUntil: 0, swipeCooldown: 0, swipeSteer: 0,
+    pitUntil: 0, pitCooldown: 0, pitSteer: 0, swipeUntil: 0, swipeCooldown: 0, swipeSteer: 0, ramCooldown: 0,
     lane: null, nextLane: null, waypoint: false, waypointX: 0, waypointZ: 0, waypointAge: 0,
     stopTimer: 0,
   };

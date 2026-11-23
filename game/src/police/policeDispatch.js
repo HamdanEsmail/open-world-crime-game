@@ -8,19 +8,8 @@ import { createPursuitDriver } from './pursuitDriverAI.js';
 import { createOfficerAI } from './officerAI.js';
 import { createArrestProcedure } from './arrestProcedure.js';
 import { createAmbientPatrols } from './ambientPatrols.js';
+import { policeUnitsForStars, rammingAllowed, mayArrestPlayer, suspectIsCalm } from './wantedLevelRules.js';
 
-/**
- * The response to each wanted level: how many cars, how many of them Enforcer SUVs, seconds between
- * arrivals, and how far away (metres) new units appear.
- */
-const RESPONSE = [
-  null,
-  { cars: 1, enforcers: 0, interval: 3.0, near: [110, 180] },
-  { cars: 3, enforcers: 0, interval: 2.6, near: [120, 220] },
-  { cars: 4, enforcers: 2, interval: 2.2, near: [120, 230] },
-  { cars: 6, enforcers: 3, interval: 1.6, near: [120, 240] },
-  { cars: 7, enforcers: 5, interval: 1.2, near: [120, 240] },
-];
 /** Police cars alive at once, all kinds together. */
 const MAX_POLICE_CARS = 10;
 /** Seconds between reshuffles of the chase formation. */
@@ -51,6 +40,7 @@ export function createPoliceDispatch(game) {
   let loudspeakerTimer = 6;
   let wantedSince = -1;
   let peakWindow = 0;
+  let curbTimer = 0;
 
   const police = {
     /** Every live unit: [{vehicle, officers, role, state, mode, ...}]. */
@@ -158,15 +148,23 @@ export function createPoliceDispatch(game) {
     }
     ctx.rx = -ctx.fz;
     ctx.rz = ctx.fx;
+    // A man on foot is reached by road: the lane point nearest him, looked up a few times a second.
+    curbTimer -= dt;
+    if (curbTimer <= 0 || !ctx.onFoot) {
+      curbTimer = 0.4;
+      const hit = ctx.onFoot && game.roads && game.roads.nearestLane ? game.roads.nearestLane(ctx.px, ctx.pz, 40) : null;
+      ctx.curbX = hit ? hit.x : ctx.px;
+      ctx.curbZ = hit ? hit.z : ctx.pz;
+    }
     const lastKnown = wanted ? wanted.lastKnown : null;
-    ctx.targetX = ctx.pursuit || !lastKnown ? ctx.px : lastKnown.x;
-    ctx.targetZ = ctx.pursuit || !lastKnown ? ctx.pz : lastKnown.z;
+    ctx.targetX = ctx.pursuit || !lastKnown ? (ctx.onFoot ? ctx.curbX : ctx.px) : lastKnown.x;
+    ctx.targetZ = ctx.pursuit || !lastKnown ? (ctx.onFoot ? ctx.curbZ : ctx.pz) : lastKnown.z;
     const area = wanted && wanted.searchArea;
     ctx.searchX = area ? area.x : ctx.targetX;
     ctx.searchZ = area ? area.z : ctx.targetZ;
     ctx.searchRadius = area ? area.radius : 60;
     ctx.night = game.sky && typeof game.sky.night === 'number' ? game.sky.night : nightFromHour(game.time.hour);
-    ctx.ram = ctx.level >= 3;
+    ctx.ram = rammingAllowed(ctx.level);
     const weapon = game.weapons && game.weapons.current ? game.weapons.current(character) : null;
     ctx.armed = weapon ? !weapon.melee : !game.weapons && character.weaponIndex >= 0;
     ctx.aiming = !!(character.intent && character.intent.aim);
@@ -175,8 +173,7 @@ export function createPoliceDispatch(game) {
     ctx.threatening = ctx.violent || (ctx.armed && ctx.aiming);
     stoppedFor = ctx.onFoot || ctx.pspeed < 2.5 ? stoppedFor + dt : 0;
     ctx.stoppedFor = stoppedFor;
-    const calm = ctx.level === 1 ? !ctx.violent && !(ctx.armed && ctx.aiming) : !ctx.violent && !ctx.armed;
-    ctx.arrestable = ctx.level >= 1 && ctx.level <= 2 && calm && !ctx.playerDown && (ctx.onFoot || ctx.pspeed < 2.5);
+    ctx.arrestable = !ctx.playerDown && mayArrestPlayer(ctx.level, ctx.pspeed, ctx.onFoot) && suspectIsCalm(ctx.level, ctx);
   }
 
   /**
@@ -219,9 +216,9 @@ export function createPoliceDispatch(game) {
 
   /** Patrols near the trouble (or who see the player) answer the call first. */
   function adoptPatrols() {
-    const plan = RESPONSE[ctx.level];
+    const plan = policeUnitsForStars(ctx.level, !ctx.onFoot);
     let cars = responseCars();
-    const room = plan.cars + (ctx.level >= 2 ? 1 : 0);
+    const room = plan[0] + (ctx.level >= 2 ? 1 : 0);
     const units = roster.units;
     for (let i = 0; i < units.length; i += 1) {
       const unit = units[i];
@@ -252,7 +249,9 @@ export function createPoliceDispatch(game) {
 
   /** Keep the number of cars up to the level's plan, one at a time, from good places. */
   function sendUnits(dt) {
-    const plan = RESPONSE[ctx.level];
+    const plan = policeUnitsForStars(ctx.level, !ctx.onFoot);
+    const wantCars = plan[0];
+    const wantEnforcers = plan[1];
     spawnTimer -= dt;
     let cars = 0;
     let enforcers = 0;
@@ -267,10 +266,9 @@ export function createPoliceDispatch(game) {
       if (unit.vehicle.spec.id === 'pspd_enforcer') enforcers += 1;
     }
     police.stats.responseCars = cars;
-    const wantCars = ctx.level === 1 && !ctx.onFoot ? 2 : plan.cars;
     if (cars >= wantCars || spawnTimer > 0 || allCars >= MAX_POLICE_CARS) return;
-    const useEnforcer = enforcers * wantCars < plan.enforcers * (cars + 1);
-    const spot = findSpawnSpot(plan.near);
+    const useEnforcer = enforcers * wantCars < wantEnforcers * (cars + 1);
+    const spot = findSpawnSpot(plan[3], plan[4]);
     if (!spot) {
       spawnTimer = 0.5;
       return;
@@ -286,15 +284,15 @@ export function createPoliceDispatch(game) {
       unit.drive.progressZ = spot.z;
       unit.lastSeen = ctx.now;
     }
-    spawnTimer = plan.interval;
+    spawnTimer = plan[2];
   }
 
   /**
-   * A lane point 'near' metres from the player that he cannot see, preferring roads ahead of him and
-   * bearings away from the units already coming, facing toward him.
+   * A lane point between `nearest` and `farthest` metres from the player that he cannot see,
+   * preferring roads ahead of him and bearings away from the units already coming, facing toward him.
    */
   const spawnSpot = { x: 0, z: 0, heading: 0 };
-  function findSpawnSpot(near) {
+  function findSpawnSpot(nearest, farthest) {
     const roads = game.roads;
     if (!roads || !roads.randomLaneNear || !game.vehicles) return null;
     let found = false;
@@ -303,7 +301,7 @@ export function createPoliceDispatch(game) {
     let bestX = 0;
     let bestZ = 0;
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      const hit = roads.randomLaneNear(ctx.px, ctx.pz, near[0], near[1], rng);
+      const hit = roads.randomLaneNear(ctx.px, ctx.pz, nearest, farthest, rng);
       if (!hit) continue;
       const x = hit.x;
       const z = hit.z;
@@ -313,7 +311,7 @@ export function createPoliceDispatch(game) {
       const dz = z - ctx.pz;
       const d = Math.sqrt(dx * dx + dz * dz) || 1;
       let score = 0;
-      if (ctx.pspeed > 5) score += ((dx * ctx.fx + dz * ctx.fz) / d) * 2.5;
+      if (ctx.pspeed > 5) score += ((dx * ctx.fx + dz * ctx.fz) / d) * (ctx.level >= 3 ? 3.5 : 2.5);
       score += Math.min(1.6, separationFromUnits(Math.atan2(dx, dz))) * 1.2;
       if (score <= bestScore) continue;
       if (sight.playerVisibleFrom(x, 1.4, z, 260)) continue;
@@ -423,7 +421,10 @@ export function createPoliceDispatch(game) {
     }
   }
 
-  /** Four sides round a stopped car, each taken by the nearest free unit; the rest trail. */
+  /**
+   * Four sides round a stopped car, each taken by the nearest free unit; a side where a car already
+   * stands (its crew out) is left to it; the rest hold back.
+   */
   const BOX_ROLES = ['boxRear', 'boxLeft', 'boxRight', 'boxFront'];
   function assignBox() {
     for (let i = 0; i < ranked.length; i += 1) ranked[i].role = 'trail';
@@ -434,6 +435,7 @@ export function createPoliceDispatch(game) {
       const across = role === 'boxRight' ? 3.4 : role === 'boxLeft' ? -3.4 : 0;
       const sx = ctx.px + ctx.fx * along + ctx.rx * across;
       const sz = ctx.pz + ctx.fz * along + ctx.rz * across;
+      if (sideTaken(sx, sz)) continue;
       let best = null;
       let bestSq = 50 * 50;
       for (let i = 0; i < ranked.length; i += 1) {
@@ -447,6 +449,18 @@ export function createPoliceDispatch(game) {
       }
       if (best) best.role = role;
     }
+  }
+
+  /** A police car that is not being driven (its crew is out) already stands within 6 m of (x, z). */
+  function sideTaken(x, z) {
+    const units = roster.units;
+    for (let i = 0; i < units.length; i += 1) {
+      const unit = units[i];
+      if (!unit.vehicle || unit.state === 'chasing' || unit.state === 'responding') continue;
+      const p = unit.vehicle.pos;
+      if ((p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) < 36) return true;
+    }
+    return false;
   }
 
   /** One unit's frame: its officers, getting out and back in, its driving, and whether it is done. */
@@ -527,6 +541,8 @@ export function createPoliceDispatch(game) {
     const hidden = !unit.visibleToPlayer;
     if (unit.mode === 'leaving') return (hidden && (unit.distance > 150 || unit.modeTime > 45)) || unit.distance > 400;
     if (unit.distance > 450 && hidden) return true;
+    // A car hopelessly behind, that has not seen him for a while, is sent round again (it respawns ahead).
+    if (ctx.level >= 2 && unit.vehicle && hidden && unit.distance > 280 && ctx.now - unit.lastSeen > 10) return true;
     if (unit.vehicle && (unit.stuckTime > 9 || unit.flipped) && hidden) return true;
     if (!unit.vehicle && unit.distance > 160 && hidden) return true;
     return false;
@@ -652,7 +668,7 @@ function createChaseContext(units) {
     playerCharacter: null, playerVehicle: null, onFoot: true, playerDown: false,
     px: 0, py: 0, pz: 0, pvx: 0, pvz: 0, pspeed: 0, pHalfLength: 0.4,
     fx: 0, fz: 1, rx: -1, rz: 0,
-    targetX: 0, targetZ: 0, searchX: 0, searchZ: 0, searchRadius: 60,
+    targetX: 0, targetZ: 0, curbX: 0, curbZ: 0, searchX: 0, searchZ: 0, searchRadius: 60,
     night: 0, ram: false, armed: false, aiming: false, fighting: false, violent: false, threatening: false,
     arrestable: false, stoppedFor: 0, cuffers: 0,
   };

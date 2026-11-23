@@ -315,8 +315,10 @@ function buildLegend(container) {
     ['mission', 'Story job'], ['objective', 'Objective'], ['contact', 'Crew / handler'], ['waypoint', 'Waypoint'],
     ['safehouse', 'Safehouse'], ['gunShop', 'Gun shop'], ['garage', 'Garage / respray'], ['food', 'Food stand'],
     ['hospital', 'Hospital'], ['policeStation', 'Police post'], ['raceStart', 'Race'], ['taxiDepot', 'Taxi fares'],
-    ['courierDepot', 'Courier runs'], ['exportDock', 'Export crane'], ['police', 'PSPD unit'], ['you', 'You'],
+    ['courierDepot', 'Courier runs'], ['exportDock', 'Export crane'], ['activity', 'Stunt jump'], ['collectible', 'Golden falcon'],
+    ['police', 'PSPD unit'], ['you', 'You'],
   ];
+  const samples = { contact: { letter: 'F', color: 0xe9b44c }, activity: { color: 0xe4572e } };
   for (const [kind, label] of entries) {
     const row = createElement('div', 'city-map-legend-row', grid);
     const icon = createElement('canvas', 'city-map-legend-icon', row);
@@ -324,7 +326,7 @@ function buildLegend(container) {
     icon.height = 44;
     const c = icon.getContext('2d');
     if (kind === 'you') drawPlayerArrow(c, 22, 23, 15, 0.5);
-    else drawBlip(c, kind, 22, kind === 'waypoint' ? 30 : 22, 15, kind === 'contact' ? { letter: 'F', color: 0xe9b44c } : null, 0);
+    else drawBlip(c, kind, 22, kind === 'waypoint' ? 30 : 22, 15, samples[kind] || null, 0);
     createElement('span', 'city-map-legend-label', row, label);
   }
   return container;

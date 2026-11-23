@@ -4,7 +4,8 @@
 // a burning car, a red light run) and composes lines from the radio script with the real street,
 // district, heading and car, about one every seven seconds, each with a burst of static.
 // Becomes game.policeRadio.
-import { RADIO_LINES, RADIO_REPLIES, RADIO_SPEAKERS, RADIO_PRIORITY, UNIT_CALLSIGNS, COLOUR_WORDS } from './policeRadioScript.js';
+import { RADIO_LINES, RADIO_REPLIES, RADIO_SPEAKERS, RADIO_PRIORITY, UNIT_CALLSIGNS } from './policeRadioScript.js';
+import { colourWordForPaint, compassWordForBearing } from './policeHeavyResponseRules.js';
 
 const MIN_GAP = 7;
 const URGENT_GAP = 3.4;
@@ -13,7 +14,6 @@ const LINE_SECONDS = 3.5;
 const LINE_LIFETIME = 6;
 const QUEUE_SIZE = 4;
 const RECENT_MEMORY = 16;
-const COMPASS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 const NUMBER_WORDS = ['', 'one', 'two', 'three', 'four', 'five'];
 
 /**
@@ -318,8 +318,7 @@ export function createPoliceRadioChatter(game) {
     const moving = vel && Math.hypot(vel.x, vel.z) > 2;
     const heading = player ? player.heading || 0 : 0;
     const bearing = moving ? Math.atan2(vel.x, -vel.z) : Math.atan2(Math.sin(heading), -Math.cos(heading));
-    const index = ((Math.round(bearing / (Math.PI / 4)) % 8) + 8) % 8;
-    const dir = COMPASS[index];
+    const dir = compassWordForBearing(bearing);
     const suspect = describeSuspect(vehicle);
     const lastKnown = game.wanted && game.wanted.lastKnown;
     const lastStreet = lastKnown && city && city.streetNameAt ? city.streetNameAt(lastKnown.x, lastKnown.z) : '';
@@ -332,7 +331,7 @@ export function createPoliceRadioChatter(game) {
       street: street ? midSentence(street) : midSentence(districtName),
       district: districtName,
       inDistrict,
-      bound: index % 2 === 0 ? `${dir}bound` : `heading ${dir}`,
+      bound: dir.indexOf('-') === -1 ? `${dir}bound` : `heading ${dir}`,
       dir,
       cross: junctionName(px, pz) || (street ? midSentence(street) : midSentence(districtName)),
       near: landmarkNear(x, z) || (street ? midSentence(street) : midSentence(districtName)),
@@ -355,7 +354,7 @@ export function createPoliceRadioChatter(game) {
       const kind = spec.className === 'policeSuv' ? 'police SUV' : 'police cruiser';
       return { aVeh: `a stolen ${kind}`, car: kind, colour: 'white', model };
     }
-    const colour = colourWord(typeof vehicle.color === 'number' ? vehicle.color : 0xffffff);
+    const colour = colourWordForPaint(typeof vehicle.color === 'number' ? vehicle.color : 0xffffff);
     const owned = vehicle.tags && (vehicle.tags.owned || vehicle.tags.playerOwned);
     const words = `${owned ? '' : 'stolen '}${colour} ${model}`;
     return { aVeh: `${/^[aeiou]/i.test(words) ? 'an' : 'a'} ${words}`, car: `${colour} ${model.split(' ')[0]}`, colour, model };
@@ -451,30 +450,6 @@ function midSentence(name) {
 /** "Al Noor Boulevard" is "Al Noor" on the radio. */
 function shortRoadName(name) {
   return midSentence(name.replace(/ (Street|Boulevard|Avenue|Ring Road|Road)$/, ''));
-}
-
-/** The colour word nearest a paint colour, weighted toward how the eye sees red and green. */
-function colourWord(color) {
-  const r = (color >> 16) & 255;
-  const g = (color >> 8) & 255;
-  const b = color & 255;
-  let best = COLOUR_WORDS[0][0];
-  let bestDistance = Infinity;
-  for (const [word, value] of COLOUR_WORDS) {
-    const wr = (value >> 16) & 255;
-    const wg = (value >> 8) & 255;
-    const wb = value & 255;
-    const mean = (r + wr) / 2;
-    const dr = r - wr;
-    const dg = g - wg;
-    const db = b - wb;
-    const distance = (2 + mean / 256) * dr * dr + 4 * dg * dg + (2 + (255 - mean) / 256) * db * db;
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      best = word;
-    }
-  }
-  return best;
 }
 
 function isPoliceVehicle(vehicle) {

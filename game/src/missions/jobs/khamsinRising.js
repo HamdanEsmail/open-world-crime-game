@@ -310,15 +310,15 @@ async function stageAtTheSpire(ctx) {
   await driveLeg(ctx, { x: kerb.x, z: kerb.z }, 'Stage the van at the Vane Spire', 'Vane Spire');
   await voice.quiet();
 
-  // The crew steps out onto the pavement beside the van.
+  // The crew steps out onto the pavement on the van's kerb side (its right, parked as it is).
   const van = ctx.van;
   const side = (along, across) => ({
     x: van.pos.x + Math.sin(van.heading) * along - Math.cos(van.heading) * across,
     z: van.pos.z + Math.cos(van.heading) * along + Math.sin(van.heading) * across,
   });
-  const a = side(-1, -2.6);
-  const b = side(-3.4, -2.8);
-  const c = side(1.6, -3);
+  const a = side(-1, 2.7);
+  const b = side(-3.4, 2.9);
+  const c = side(1.6, 3.1);
   placePerson(m, ctx.mina, a.x, a.z, Math.PI);
   const faris = m.spawnCast('faris', b.x, b.z, Math.PI);
   const tavi = m.spawnCast('tavi', c.x, c.z, Math.PI);

@@ -4,6 +4,7 @@
 // footsteps. Interface sounds and story stings live in interfaceSounds.js; the guide lists every id.
 import { playTone, playNoise, makeSweptFilter, setPitchScale } from './synthPrimitives.js';
 import { INTERFACE_RECIPES } from './interfaceSounds.js';
+import { CROWD_RECIPES } from './crowdVoices.js';
 import { SOUND_EFFECT_IDS, isDieselClass } from './radioAndSoundGuide.js';
 
 /**
@@ -134,10 +135,14 @@ const WORLD_RECIPES = {
   splash,
   footstep,
   windGust,
+  ...CROWD_RECIPES,
 };
 
 /** Every id play() understands, flattened from the guide's groups. */
 export const SOUND_IDS = Object.freeze(Object.values(SOUND_EFFECT_IDS).flat());
+
+/** Other names the menus and jobs use for the same sounds. */
+export const SOUND_ALIASES = Object.freeze({ menuOpen: 'mapOpen', purchase: 'cash', jobDone: 'missionPassed', jobBlown: 'missionFailed', knockedOut: 'death' });
 
 function rand(min, max) {
   return min + Math.random() * (max - min);

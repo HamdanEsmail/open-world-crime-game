@@ -7,7 +7,7 @@ import { SURFACE_METRES } from './groundSurfaceAtlas.js';
 
 /**
  * @param {Object} game
- * @param {(x:number, z:number) => string} chunkOf   names the chunk a piece of ground belongs to
+ * @param {(x:number, z:number, layer:string) => string} chunkOf   names the chunk a piece of ground belongs to
  */
 export function createGroundMeshBuilder(game, chunkOf) {
   const { valueNoise2D } = game.math;
@@ -17,10 +17,11 @@ export function createGroundMeshBuilder(game, chunkOf) {
 
   /** The buffer for a layer ('base' | 'paint' | 'solid') at a world point. */
   function target(layer, x, z) {
-    const key = `${layer}|${chunkOf(x, z)}`;
+    const chunk = chunkOf(x, z, layer);
+    const key = `${layer}|${chunk}`;
     let buffer = buffers.get(key);
     if (!buffer) {
-      buffer = { layer, chunk: chunkOf(x, z), positions: [], normals: [], colors: [], uvs: [], tiles: [], indices: [] };
+      buffer = { layer, chunk, positions: [], normals: [], colors: [], uvs: [], tiles: [], indices: [] };
       buffers.set(key, buffer);
     }
     return buffer;

@@ -171,7 +171,7 @@ async function tipOffAtTheDoor(ctx) {
 
 /** The route itself, flat out, three stars locked on: Gold Street, Vane Boulevard, the Gate. */
 async function runTheGetawayRoute(ctx) {
-  const { m, voice, gate, spire } = ctx;
+  const { m, scope, voice, gate, spire } = ctx;
   await backInto(m, ctx.car, 'Get back in the Summit');
   const started = m.game.time.elapsed;
   const clock = m.timer('TO THE GATE', 150, { reason: "Too slow to the Gate. On the night, that's a prison cell." });
@@ -192,18 +192,18 @@ async function runTheGetawayRoute(ctx) {
     const p = lanePoint(m, 40, z, 0);
     return { x: p.x, z: p.z };
   };
-  await m.checkpoints([south(-60)], { radius: 12, label: 'Al Noor junction' });
-  voice.talk([
-    ['mina', 'Al Noor junction. On the night these lights will be ours.'],
-    ['mina', 'Next is Tamarind. Keep it straight. Ish.'],
-  ]);
-  await m.checkpoints([south(300)], { radius: 12, label: 'Tamarind junction' });
-  voice.talk([
-    ['dispatch', 'Requesting a roadblock at the Gate. Negative, no units in position.'],
-    ['mina', "No roadblock. That's the best news I've had all week."],
-  ]);
-  await m.checkpoints([south(680)], { radius: 12, label: 'Oasis junction' });
-  voice.talk([['mina', "Gate in sight. Don't brake. I mean it, don't."]]);
+  const junctionTalk = {
+    1: [['mina', 'Al Noor junction. On the night these lights will be ours.'], ['mina', 'Next is Tamarind. Keep it straight. Ish.']],
+    2: [['dispatch', 'Requesting a roadblock at the Gate. Negative, no units in position.'], ['mina', "No roadblock. That's the best news I've had all week."]],
+    3: [['mina', "Gate in sight. Don't brake. I mean it, don't."]],
+  };
+  let leg = 0;
+  scope.on('mission:checkpoint', (event) => {
+    if (leg === 1 && event && junctionTalk[event.index]) voice.talk(junctionTalk[event.index]);
+  });
+  leg = 1;
+  await m.checkpoints([south(-60), south(300), south(680)], { radius: 12, label: 'JUNCTIONS' });
+  leg = 2;
 
   m.objective('Burst out through the Port Sarab Gate');
   await m.checkpoints([{ x: gate.laneX, z: gate.z - 12 }], { radius: 13, label: 'Port Sarab Gate' });

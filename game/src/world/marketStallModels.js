@@ -145,21 +145,13 @@ export function buildCanopyPole() {
   return b.build();
 }
 
-/** A sagging cable 1 m long (stretch it with the copy's x scale); the lanterns hang separately. */
-export function buildLanternCable() {
-  const b = createShapeBuilder();
-  const points = [];
-  for (let i = 0; i <= 6; i += 1) {
-    const u = i / 6;
-    points.push([u - 0.5, -0.45 * (1 - (2 * u - 1) * (2 * u - 1)), 0]);
-  }
-  b.tube(points, 0.012, 3, { color: rgb(0x2a2420) });
-  return b.build();
-}
-
-/** One small lantern of coloured glass (the copy's colour) in a brass cap, glowing at night. */
+/**
+ * One small lantern of coloured glass (the copy's colour) in a brass cap, glowing at night, with its
+ * stretch of cable (1.4 m along local X): a string of copies, each tilted to the sag, makes the line.
+ */
 export function buildHangingLantern() {
   const b = createShapeBuilder();
+  b.box(1.4, 0.022, 0.022, { color: rgb(0x2a2420) });
   b.cylinder(0.11, 0.08, 0.26, 6, { y: -0.32, color: [1, 1, 1], tint: 1, glow: 1, bend: 0.12, open: true });
   b.cone(0.12, 0.14, 5, { y: -0.13, color: BRASS, bend: 0.1 });
   b.cone(0.07, 0.08, 5, { y: -0.49, rx: Math.PI, color: BRASS, bend: 0.12 });

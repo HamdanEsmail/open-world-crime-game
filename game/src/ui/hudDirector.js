@@ -15,6 +15,7 @@ import { createSpeedometerDial } from './speedometerDial.js';
 import { createNotificationFeed } from './notificationFeed.js';
 import { createInteractPrompt } from './interactPrompt.js';
 import { createCrosshairAndDamage } from './crosshairAndDamage.js';
+import { createActivityBanner } from './activityBanner.js';
 import { applySandGrainTexture, setClass, setShown } from './uiElements.js';
 
 /**
@@ -52,6 +53,7 @@ export function createHud(game) {
   });
   const prompt = createInteractPrompt(game, part('hud-interact-prompt'));
   const reticle = createCrosshairAndDamage(game, part('hud-crosshair'), part('hud-damage-vignette'));
+  const activityLine = createActivityBanner(game, part('hud-activity-banner'));
 
   const hud = {
     visible: false,
@@ -76,6 +78,8 @@ export function createHud(game) {
     showVehicle: feed.showVehicle,
     showRadio: feed.showRadio,
     showHit: reticle.showHit,
+    /** A big centre-screen line: banner('LAP 2', '1:42.3', 'info', 1.6). */
+    banner: activityLine.show,
     /** The GPS route as a list of {x, z} from the player to the target (empty when none). */
     get route() {
       return gps.route;
@@ -124,6 +128,7 @@ export function createHud(game) {
       else weapon.update();
       feed.update();
       reticle.update();
+      activityLine.update();
     } catch (error) {
       if (!hud.reportedError) {
         hud.reportedError = true;

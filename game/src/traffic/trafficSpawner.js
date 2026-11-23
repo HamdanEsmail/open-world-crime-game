@@ -2,6 +2,7 @@
 // camera's sight (or far off), mostly ahead of where the player is heading, as many as the district,
 // the hour and the mission allow, in the district's own mix of models and paint, each with a driver
 // and sometimes a passenger. They are taken away again only out of sight, or very far off.
+import { trafficDensityAtHour } from './trafficRules.js';
 
 /** Seconds between two looks at the population. */
 const SPAWN_TICK = 0.22;
@@ -11,12 +12,8 @@ const IN_VIEW_SPAWN_DISTANCE = 150;
 const SPAWN_CLEARANCE = 14;
 /** A car standing still this long out of sight is quietly taken away. */
 const STUCK_REMOVE_AFTER = 20;
-
-/** Share of the full traffic on the road at each hour: quiet before dawn, rush at 08:00 and 17:30. */
-const TRAFFIC_BY_HOUR = [
-  [0, 0.42], [1, 0.28], [2, 0.2], [4, 0.2], [5, 0.3], [6, 0.58], [7, 0.88], [8, 1.0], [9, 0.86],
-  [11, 0.74], [13, 0.8], [15, 0.8], [16.5, 0.94], [17.5, 1.0], [19, 0.86], [21, 0.68], [23, 0.52], [24, 0.42],
-];
+/** When the streets are filled all at once, cars may be placed this close to the player. */
+const NEAREST_FILL_DISTANCE = 22;
 
 /**
  * Build the spawner of moving traffic.
@@ -30,10 +27,13 @@ export function createTrafficSpawner(game, traffic, driverAI) {
   const nearby = new Array(32);
   let timer = 0;
 
-  /** Every few frames: retire cars that left, then top the population up toward its target. */
-  function update(dt) {
+  /**
+   * Every few frames: retire cars that left, then top the population up toward its target. With
+   * `fillNow` the whole population is placed at once, in view or not (a new game, a teleport).
+   */
+  function update(dt, fillNow) {
     timer -= dt;
-    if (timer > 0) return;
+    if (timer > 0 && !fillNow) return;
     timer = SPAWN_TICK;
     const pop = game.config.population;
     const focus = traffic.focus;
@@ -41,9 +41,14 @@ export function createTrafficSpawner(game, traffic, driverAI) {
     traffic.stats.target = target;
     retireCars(focus, pop, target);
     let made = 0;
-    while (traffic.drivers.length < target && made < 2) {
-      if (!spawnOneCar(focus, pop)) break;
-      made += 1;
+    let tries = 0;
+    while (traffic.drivers.length < target && (fillNow ? tries < target * 2 : made < 2)) {
+      tries += 1;
+      if (spawnOneCar(focus, pop, fillNow)) {
+        made += 1;
+        // Placing many at once: each new car must see the ones placed just before it.
+        if (fillNow) traffic.grid.rebuild(focus.x, focus.z);
+      } else if (!fillNow) break;
     }
   }
 
@@ -63,7 +68,7 @@ export function createTrafficSpawner(game, traffic, driverAI) {
       samples += 1;
     }
     density /= samples;
-    const share = density * trafficByHour(game.time.hour) * traffic.density;
+    const share = density * trafficDensityAtHour(game.time.hour) * traffic.density;
     return Math.max(0, Math.min(pop.trafficVehicles, Math.round(pop.trafficVehicles * share)));
   }
 
@@ -85,7 +90,8 @@ export function createTrafficSpawner(game, traffic, driverAI) {
       let remove = distance > pop.despawnRadius * 1.6 || (distance > pop.despawnRadius && !seen);
       if (!remove && !seen && distance > 25) {
         const receding = vehicle.vel.x * dx + vehicle.vel.z * dz > 0;
-        const atLights = state.lane.to.signal && state.phase === 0 && state.stopGap < 4 && state.stillTime < 45;
+        // Queueing at a light (or just pulling away from it) is not being stuck, up to a long wait.
+        const atLights = state.lane.to.signal && state.phase === 0 && state.distToLine < 60 && state.stillTime < 45;
         if ((state.stillTime > STUCK_REMOVE_AFTER && !atLights) || state.lost) {
           remove = true;
           traffic.stats.stuckRemoved += 1;
@@ -111,15 +117,19 @@ export function createTrafficSpawner(game, traffic, driverAI) {
    * rest look all round, nearer in, out of the camera's view. Cars that will drive toward the
    * player are preferred: a car spawned driving away is soon out of reach and wasted.
    */
-  function spawnOneCar(focus, pop) {
+  function spawnOneCar(focus, pop, anywhere) {
     const roads = game.roads;
     const heading = travelHeading();
     const quick = game.player && game.player.speed > 6;
+    const nearest = anywhere ? NEAREST_FILL_DISTANCE : pop.minSpawnDistance;
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const ahead = rng.chance(quick ? 0.7 : 0.5);
       let angle;
       let radius;
-      if (ahead) {
+      if (anywhere) {
+        angle = rng.range(-Math.PI, Math.PI);
+        radius = nearest + (pop.spawnRadius * 0.85 - nearest) * Math.pow(rng.next(), 1.4);
+      } else if (ahead) {
         angle = heading + rng.range(-0.75, 0.75);
         radius = rng.range(IN_VIEW_SPAWN_DISTANCE, pop.spawnRadius);
       } else {
@@ -136,10 +146,10 @@ export function createTrafficSpawner(game, traffic, driverAI) {
       const dx = x - focus.x;
       const dz = z - focus.z;
       const distance = Math.sqrt(dx * dx + dz * dz);
-      if (distance < pop.minSpawnDistance || distance > pop.spawnRadius) continue;
+      if (distance < nearest || distance > pop.spawnRadius) continue;
       const approaching = -(lane.dirX * dx + lane.dirZ * dz) / distance > 0.2;
-      if (!approaching && !rng.chance(0.4)) continue;
-      if (distance < IN_VIEW_SPAWN_DISTANCE && traffic.isVisible(x, z, 6)) continue;
+      if (!approaching && !anywhere && !rng.chance(0.4)) continue;
+      if (!anywhere && distance < IN_VIEW_SPAWN_DISTANCE && traffic.isVisible(x, z, 6)) continue;
       if (traffic.isHeld(x, z)) continue;
       if (game.terrain && game.terrain.isWater && game.terrain.isWater(x, z)) continue;
       if (!roadIsClear(x, z)) continue;
@@ -312,17 +322,4 @@ function describeStuck(state) {
     text += ` behind ${state.obstacle.spec ? state.obstacle.spec.id : 'person'} #${state.obstacle.id}`;
   }
   return state.lost ? `${text} lost` : text;
-}
-
-/** Share of full traffic at an hour of the day (0..24), from the table above. */
-export function trafficByHour(hour) {
-  const h = ((hour % 24) + 24) % 24;
-  for (let i = 1; i < TRAFFIC_BY_HOUR.length; i += 1) {
-    const upper = TRAFFIC_BY_HOUR[i];
-    if (h <= upper[0]) {
-      const lower = TRAFFIC_BY_HOUR[i - 1];
-      return lower[1] + ((upper[1] - lower[1]) * (h - lower[0])) / (upper[0] - lower[0]);
-    }
-  }
-  return TRAFFIC_BY_HOUR[0][1];
 }

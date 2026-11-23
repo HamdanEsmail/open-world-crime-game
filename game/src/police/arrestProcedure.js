@@ -2,14 +2,13 @@
 // player who has stopped fighting (on foot, or sitting in a car that has all but stopped) makes the
 // arrest. The player is warned the moment it starts and can still bolt; above two stars there are
 // no arrests, only gunfire.
+import { mayArrestPlayer } from './wantedLevelRules.js';
 
 /** Metres from the player an officer must stay within to make the arrest, on foot and at a car door. */
 const CUFF_REACH = 3;
 const CUFF_REACH_AT_CAR = 3.6;
 /** Seconds the officer must hold him. */
 const CUFF_SECONDS = 1.5;
-/** A car slower than this (m/s) counts as stopped. */
-const STOPPED_SPEED = 2;
 
 /**
  * Build the arrest procedure.
@@ -40,7 +39,7 @@ export function createArrestProcedure(game) {
       return;
     }
     const inCar = !!ctx.playerVehicle;
-    if (inCar && ctx.pspeed >= STOPPED_SPEED) {
+    if (!mayArrestPlayer(ctx.level, ctx.pspeed, ctx.onFoot)) {
       decay(dt);
       return;
     }

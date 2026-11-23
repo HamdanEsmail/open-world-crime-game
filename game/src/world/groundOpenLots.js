@@ -10,6 +10,9 @@ let FLOOR = STREET_LEVELS.sidewalk;
 let PAINT = FLOOR + 0.012;
 const TAU = Math.PI * 2;
 
+/** Blossom colours of flower beds and bougainvillea, laid over the speckled cobble swatch. */
+export const BLOSSOMS = [0xff4f9a, 0xff8a3a, 0xe84fd0, 0xffc23a, 0xff6a6a];
+
 /** Lay one open lot of the plan by its `use`, on the block floor's height. */
 export function layOpenLot(game, ground, lot, block, rng) {
   FLOOR = STREET_LEVELS.sidewalk;
@@ -269,9 +272,9 @@ function layGarden(ground, lot, rng) {
   for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
     const bx = cx + sx * w * 0.25;
     const bz = cz + sz * d * 0.25;
-    const hw = Math.min(5, w * 0.12);
-    const hd = Math.min(3, d * 0.1);
-    ground.box('solid', bx - hw, bz - hd, bx + hw, bz + hd, FLOOR, FLOOR + 0.55, SURFACE.PAINT, SURFACE.KERB, { topTint: rng.pick([0xff5aa8, 0xffa63a, 0xf05ad8, 0xffd23a]), sideTint: 0xf4e8d8, jitter: 0.12 });
+    const hw = Math.min(4, w * 0.1);
+    const hd = Math.min(2.4, d * 0.08);
+    ground.box('solid', bx - hw, bz - hd, bx + hw, bz + hd, FLOOR, FLOOR + 0.45, SURFACE.COBBLES, SURFACE.KERB, { topTint: rng.pick(BLOSSOMS), sideTint: 0xf4e8d8, jitter: 0.12 });
   }
 }
 
@@ -335,7 +338,7 @@ function layContainerYard(ground, lot, rng) {
     const r = rng.range(1, 2.6);
     const px = lot.x0 + rng.range(r + 4, lot.x1 - lot.x0 - r - 4);
     const pz = lot.z0 + rng.range(r + 4, lot.z1 - lot.z0 - r - 4);
-    ground.ring('paint', px, pz, 0, r, 0, TAU, PAINT - 0.006, SURFACE.ASPHALT, { tint: 0x9a9690, step: 2 });
+    ground.ring('paint', px, pz, 0, r, 0, TAU, PAINT - 0.006, SURFACE.CONCRETE, { tint: 0xb8b4ae, step: 2 });
   }
 }
 

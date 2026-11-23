@@ -3,6 +3,7 @@
 // honks at a blockage and then changes lane, pulls round it on the wrong side or backs out, and slows
 // to let a siren by. Looking around is staggered across frames; the wheel and pedals act every frame.
 import { PATH_PIECES } from './trafficJunctions.js';
+import { mustStopForSignal } from './trafficRules.js';
 import { steerTowardPoint, idmAcceleration, applyPedals, backOut, holdStill } from './trafficCarControls.js';
 
 /** Speed (m/s) a driver slows to before a junction without lights, to look both ways. */
@@ -388,7 +389,7 @@ export function createTrafficDriverAI(game, traffic, junctions) {
       // green further back) the light changes while it can still stop comfortably.
       if (headOfQueue || state.obstacleSpeed > 1) {
         if (!node.signal || fleeing || state.commitColor === 'clearing' || game.roads.signalFor(lane) === 'green') return;
-        if (toLine < (speed * speed) / (2 * state.comfortDecel * 1.4) + 1) return;
+        if (!mustStopForSignal('yellow', toLine - 1, speed, state.comfortDecel)) return;
       }
       state.committed = false;
       state.commitColor = null;
@@ -408,7 +409,7 @@ export function createTrafficDriverAI(game, traffic, junctions) {
           go = state.waitedOnGreen && toLine < 3 && now - state.colorSince < CLEARING_TIME;
           if (go) color = 'clearing';
         } else if (color === 'yellow' && !state.waitedOnGreen) {
-          go = toLine < (speed * speed) / (2 * state.comfortDecel * 1.4);
+          go = !mustStopForSignal(color, toLine, speed, state.comfortDecel);
         }
       }
       state.signalGo = go && color !== 'clearing';

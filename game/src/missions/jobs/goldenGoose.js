@@ -163,6 +163,9 @@ function armTheNomad(ctx) {
 async function waitForTheConvoy(ctx) {
   const { m, voice } = ctx;
   m.objective('Wait for the convoy');
+  // Out here in the dunes nobody hears the shooting: the PSPD only learns of it from the carrier's alarm.
+  m.wanted.clear();
+  m.wanted.lock(0);
   voice.talk([['tavi', 'Kill the engine. Let the dust settle.']]);
   await m.seconds(2.5);
   const heading = Math.atan2(-120, -230);
@@ -171,11 +174,13 @@ async function waitForTheConvoy(ctx) {
   const middle = at(0);
   const rear = at(-22);
   ctx.carrier = m.spawnVehicle('aurum_bullion', { x: middle.x, z: middle.z, heading: middle.heading });
-  ctx.driver = m.spawnPerson({ archetype: 'worker', kind: 'civilian', name: 'Nabil Sabri', x: middle.x, z: middle.z });
+  // Sturdy enough to live through a stray round; Dahan's wish is broken only on purpose.
+  ctx.driver = m.spawnPerson({ archetype: 'worker', kind: 'civilian', name: 'Nabil Sabri', x: middle.x, z: middle.z, health: 240 });
   m.seat(ctx.carrier, ctx.driver, 0);
   for (const spot of [lead, rear]) {
     const suv = m.spawnVehicle('oryx_summit', { x: spot.x, z: spot.z, heading: spot.heading, color: JACKAL_BLACK, faction: 'gang' });
-    const wheelman = m.spawnPerson({ archetype: 'gang', faction: 'gang', x: spot.x, z: spot.z, weapon: 'pistol', ammo: 90 });
+    const leads = spot === lead;
+    const wheelman = m.spawnPerson({ archetype: 'gang', faction: 'gang', name: leads ? 'Rafiq' : undefined, x: spot.x, z: spot.z, weapon: 'pistol', ammo: 90, health: leads ? 140 : undefined });
     const gunner = m.spawnPerson({ archetype: 'gang', faction: 'gang', x: spot.x, z: spot.z, weapon: 'smg', ammo: 240 });
     m.seat(suv, wheelman, 0);
     m.seat(suv, gunner, 1);
@@ -286,7 +291,7 @@ async function chaseTheLeader(ctx, leader) {
   m.calm(leader);
   const suv = ctx.escorts.find((car) => car && !car.wrecked && Math.abs(car.speed) < 30);
   const side = m.objective('Stop the escort leader before he reaches Sayf', { optional: true });
-  voice.talk([['tavi', "One's running for Sayf! No witnesses, Dust!"]]);
+  voice.talk([['tavi', "Rafiq's running for Sayf! He leads the escort. No witnesses, Dust!"]]);
   if (suv) {
     m.seat(suv, leader, 0);
     m.fleeFrom(suv, { speed: 26 });

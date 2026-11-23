@@ -11,6 +11,8 @@ const DEFAULT_EVENT_DAMAGE = 140;
 const VEHICLE_DAMAGE_SCALE = 6;
 /** Speed (m/s) a blast gives a vehicle at its centre, scaled by mass below. */
 const VEHICLE_SHOVE = 9;
+/** Below this strength (the outer edge of a blast) people are hurt but stay on their feet. */
+const WEAK_EDGE = 0.25;
 
 /**
  * Create the blast rules and start listening for other systems' explosions.
@@ -21,7 +23,7 @@ export function createExplosionDamage(game, grid, ballistics, hooks = {}) {
   const nearby = [];
   const centre = new THREE.Vector3();
   const body = new THREE.Vector3();
-  const damageInfo = { source: null, weaponId: 'explosion', dirX: 0, dirZ: 0, headshot: false, kind: 'explosion' };
+  const damageInfo = { source: null, weaponId: 'explosion', dirX: 0, dirZ: 0, headshot: false, kind: 'explosion', noThrow: false };
   const vehicleInfo = { source: null, kind: 'explosion', x: 0, z: 0 };
   const knockInfo = { source: null };
 
@@ -64,10 +66,12 @@ export function createExplosionDamage(game, grid, ballistics, hooks = {}) {
       const amount = blastDamageAtDistance(damage, distance, radius, covered);
       if (amount > 0.5 && characters.damage) {
         // The character system throws whoever survives an explosion's damage away along (dirX, dirZ),
-        // harder for a bigger hit, and launches whoever it kills.
+        // harder for a bigger hit, and launches whoever it kills; behind a wall or at the blast's weak
+        // edge it only hurts (noThrow).
         damageInfo.source = source;
         damageInfo.dirX = nx;
         damageInfo.dirZ = nz;
+        damageInfo.noThrow = covered || blastStrength(distance, radius) < WEAK_EDGE;
         characters.damage(person, amount, damageInfo);
         damageInfo.source = null;
         if (hooks.onHit) hooks.onHit(source, person, amount);

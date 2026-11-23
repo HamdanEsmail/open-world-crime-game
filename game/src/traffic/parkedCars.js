@@ -2,6 +2,7 @@
 // plan (kerbside spots, car parks, the used-car lots, the PSPD yard with its patrol cars, truck yards
 // with vans and lorries, hotel forecourts with the expensive metal), filled near the player out of
 // sight with the district's own models, engines off, and kept while the player is around.
+import { parkedCarChanceForLot } from './trafficRules.js';
 
 /** Seconds between two looks at the parked population. */
 const PARKED_TICK = 0.45;
@@ -14,13 +15,13 @@ const IN_VIEW_SPAWN_DISTANCE = 150;
 /** Parked cars may appear this close, but only behind the camera. */
 const NEAREST_HIDDEN_SPAWN = 32;
 const SPOT_CELL = 100;
-/** Car parks the traffic fills, with the share of bays taken and the bay size [width, depth]. */
-const LOT_USES = {
-  parking: { fill: 0.5, bay: [3, 5.6] },
-  carLot: { fill: 0.85, bay: [3, 5.6] },
-  policeYard: { fill: 0.7, bay: [3.2, 5.8] },
-  truckYard: { fill: 0.55, bay: [3.8, 9] },
-  hotelForecourt: { fill: 0.6, bay: [3.2, 5.8] },
+/** The size of a bay [width, depth] in each kind of car park the traffic fills. */
+const BAY_SIZES = {
+  parking: [3, 5.6],
+  carLot: [3, 5.6],
+  policeYard: [3.2, 5.8],
+  truckYard: [3.8, 9],
+  hotelForecourt: [3.2, 5.8],
 };
 
 /**
@@ -37,23 +38,26 @@ export function createParkedCars(game, traffic) {
   let adoptTick = 0;
   layOutSpots();
 
-  /** Retire parked cars left far behind, adopt cars the player abandoned, fill free bays near the player. */
-  function update(dt) {
+  /**
+   * Retire parked cars left far behind, adopt cars the player abandoned, fill free bays near the
+   * player. With `fillNow` every free bay may be filled at once, in view or not (a new game, a teleport).
+   */
+  function update(dt, fillNow) {
     tick -= dt;
     adoptTick -= dt;
     if (adoptTick <= 0) {
       adoptTick = ADOPT_TICK;
       adoptAbandonedCars();
     }
-    if (tick > 0) return;
+    if (tick > 0 && !fillNow) return;
     tick = PARKED_TICK;
     const pop = game.config.population;
     const focus = traffic.focus;
     retireParkedCars(focus, pop);
     const target = Math.round(pop.parkedVehicles * Math.min(1, 0.4 + 0.6 * traffic.density));
     let made = 0;
-    while (traffic.parked.length < target && made < 2) {
-      if (!fillOneBay(focus, pop)) break;
+    while (traffic.parked.length < target && (fillNow || made < 2)) {
+      if (!fillOneBay(focus, pop, fillNow)) break;
       made += 1;
     }
   }
@@ -116,8 +120,13 @@ export function createParkedCars(game, traffic) {
    * Park one car in a free bay near the player: the nearer bays first (with a little chance), never
    * in plain view nearby, never where something already stands.
    */
-  function fillOneBay(focus, pop) {
+  function fillOneBay(focus, pop, anywhere) {
     const reach = pop.spawnRadius;
+    const nearest = anywhere ? 6 : NEAREST_HIDDEN_SPAWN;
+    // How full each car park already is, so the cars spread over kerbs and lots instead of packing one.
+    const list = traffic.parked;
+    for (let i = 0; i < list.length; i += 1) if (list[i].spot && list[i].spot.lot) list[i].spot.lot.taken = 0;
+    for (let i = 0; i < list.length; i += 1) if (list[i].spot && list[i].spot.lot) list[i].spot.lot.taken += 1;
     const cx0 = Math.floor((focus.x - reach) / SPOT_CELL);
     const cx1 = Math.floor((focus.x + reach) / SPOT_CELL);
     const cz0 = Math.floor((focus.z - reach) / SPOT_CELL);
@@ -126,19 +135,20 @@ export function createParkedCars(game, traffic) {
     let bestScore = Infinity;
     for (let cx = cx0; cx <= cx1; cx += 1) {
       for (let cz = cz0; cz <= cz1; cz += 1) {
-        const list = cells.get(cellKey(cx, cz));
-        if (!list) continue;
-        for (let i = 0; i < list.length; i += 1) {
-          const spot = list[i];
+        const bays = cells.get(cellKey(cx, cz));
+        if (!bays) continue;
+        for (let i = 0; i < bays.length; i += 1) {
+          const spot = bays[i];
           if (spot.vehicle || spot.unusable) continue;
           const dx = spot.x - focus.x;
           const dz = spot.z - focus.z;
           const distance = Math.sqrt(dx * dx + dz * dz);
-          if (distance < NEAREST_HIDDEN_SPAWN || distance > reach) continue;
-          const score = distance * (0.75 + rng.next() * 0.5);
+          if (distance < nearest || distance > reach) continue;
+          const crowding = spot.lot ? 1 + spot.lot.taken * 0.3 : 1;
+          const score = distance * (0.6 + rng.next() * 0.8) * crowding;
           if (score >= bestScore) continue;
-          if (distance < IN_VIEW_SPAWN_DISTANCE && traffic.isVisible(spot.x, spot.z, 4)) continue;
-          if (traffic.isHeld(spot.x, spot.z) || !bayIsFree(spot)) continue;
+          if (!anywhere && distance < IN_VIEW_SPAWN_DISTANCE && traffic.isVisible(spot.x, spot.z, 4)) continue;
+          if (traffic.isHeld(spot.x, spot.z) || !bayIsFree(spot, anywhere)) continue;
           best = spot;
           bestScore = score;
         }
@@ -215,8 +225,8 @@ export function createParkedCars(game, traffic) {
     return spec.traffic[district ? district.traffic : 'downtown'] || 0;
   }
 
-  /** Nothing already standing in the bay. */
-  function bayIsFree(spot) {
+  /** Nothing already standing in the bay (when filling many at once, checked against every vehicle). */
+  function bayIsFree(spot, thorough) {
     const count = traffic.grid.query(spot.x, spot.z, 3.5, nearby);
     for (let i = 0; i < count; i += 1) {
       const thing = nearby[i];
@@ -224,6 +234,13 @@ export function createParkedCars(game, traffic) {
       const dz = thing.pos.z - spot.z;
       const room = thing.dynamics !== undefined ? 3.6 : 1.2;
       if (dx * dx + dz * dz < room * room) return false;
+    }
+    if (!thorough) return true;
+    const vehicles = game.vehicles.list;
+    for (let i = 0; i < vehicles.length; i += 1) {
+      const dx = vehicles[i].pos.x - spot.x;
+      const dz = vehicles[i].pos.z - spot.z;
+      if (dx * dx + dz * dz < 3.6 * 3.6) return false;
     }
     return true;
   }
@@ -233,11 +250,11 @@ export function createParkedCars(game, traffic) {
     const city = game.city;
     if (!city) return;
     for (const spot of city.parkingSpots || []) {
-      addSpot({ x: spot.x, z: spot.z, heading: spot.heading, district: spot.district, use: 'kerb', vehicle: null });
+      addSpot({ x: spot.x, z: spot.z, heading: spot.heading, district: spot.district, use: 'kerb', vehicle: null, lot: null });
     }
     for (const lot of city.openLots || []) {
-      const use = LOT_USES[lot.use];
-      if (use) layOutLot(lot, use);
+      const chance = parkedCarChanceForLot(lot.use);
+      if (chance > 0) layOutLot(lot, BAY_SIZES[lot.use] || BAY_SIZES.parking, chance);
     }
   }
 
@@ -245,27 +262,28 @@ export function createParkedCars(game, traffic) {
    * Rows of bays across a lot, parallel to the street it opens onto: pairs of rows back to back with
    * a driving aisle between the pairs; the first row faces the street.
    */
-  function layOutLot(lot, use) {
+  function layOutLot(lot, bay, chance) {
     const alongX = lot.front === 'n' || lot.front === 's';
     const width = alongX ? lot.x1 - lot.x0 : lot.z1 - lot.z0;
     const depth = alongX ? lot.z1 - lot.z0 : lot.x1 - lot.x0;
-    const bayWidth = use.bay[0];
-    const bayDepth = use.bay[1];
+    const bayWidth = bay[0];
+    const bayDepth = bay[1];
     const aisle = 6.5;
     const margin = 2.5;
     // Heading that faces the street side, and the depth axis pointing from the street inward.
     const towardFront = lot.front === 's' ? 0 : lot.front === 'n' ? Math.PI : lot.front === 'e' ? Math.PI / 2 : -Math.PI / 2;
+    const group = { taken: 0 };
     let row = 0;
     let at = margin + aisle * 0.5;
     while (at + bayDepth + margin <= depth && row < 8) {
       const facing = row % 2 === 0 ? towardFront : towardFront + Math.PI;
       const centreDepth = at + bayDepth * 0.5;
       for (let along = margin + bayWidth * 0.5; along + bayWidth * 0.5 + margin <= width; along += bayWidth) {
-        if (!rng.chance(use.fill + 0.25)) continue;
+        if (!rng.chance(chance)) continue;
         const inward = depthToWorld(lot, centreDepth);
         const x = alongX ? lot.x0 + along : inward;
         const z = alongX ? inward : lot.z0 + along;
-        addSpot({ x, z, heading: wrap(facing), district: lot.district, use: lot.use, vehicle: null });
+        addSpot({ x, z, heading: wrap(facing), district: lot.district, use: lot.use, vehicle: null, lot: group });
       }
       at += bayDepth;
       row += 1;

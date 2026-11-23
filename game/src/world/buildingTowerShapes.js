@@ -5,7 +5,8 @@
 import { rectPoints, chamferPoints, roundedPoints, ellipsePoints, scalePoints, rotatePoints, insetPoints, faceOf } from './buildingGeometryBuilder.js';
 import { parapetRoof, plantRoom, airConUnits, helipad, roofPool, pergola, roofPlanters, antennaMast, spireNeedle, waterTanks, satelliteDishes } from './rooftopDetails.js';
 import { hangWallSign, hangBladeSign, raiseRooftopSign } from './neonSigns.js';
-import { paletteColor } from './buildingShapes.js';
+import { paletteColor, mixHex, stonePodium, lobbyFront, crownBand, crownFrame } from './buildingShapes.js';
+import { towerCrownForVariant, snapToStoreys, storeysForHeight, frontDoorSideOf, backSideOf } from './districtArchitectureStyles.js';
 
 /** A glass tower of The Spires (or a marina or Lantern Row one), its massing chosen by `variant`. */
 export function raiseGlassTower(ctx, building) {
@@ -22,21 +23,21 @@ export function raiseGlassTower(ctx, building) {
   const tile = GLASS_TILES[(building.variant + Math.floor((building.tint || 0) * 4)) % GLASS_TILES.length];
   const crownTint = mixHex(glass, 0xffffff, 0.55);
   b.use(tile, glass);
-  const variant = building.variant % 8;
+  const crown = towerCrownForVariant(building.variant);
 
-  if (variant === 0) {
+  if (crown === 'taper') {
     // Chamfered corners and a crown that tapers in.
     const pts = chamferPoints(x, z, bw, bd, Math.min(bw, bd) * 0.2);
-    const taper = snapStorey(y0 + (h - y0) * 0.8, y0);
+    const taper = snapToStoreys(y0 + (h - y0) * 0.8, y0);
     b.prism(pts, y0, taper, { top: false, vBase: y0 });
     b.prism(pts, taper, h, { top: false, vBase: y0, topScale: 0.6 });
     crownBand(ctx, pts, taper - 1.2, 1.2, crownTint);
     finishTowerRoof(ctx, building, scalePoints(pts, x, z, 0.6), h, { needle: h > 140 });
     corporateSign(ctx, building, x, z, bw, bd, taper - 10);
-  } else if (variant === 1) {
+  } else if (crown === 'drum') {
     // Rounded, with a narrower drum on top and a needle.
     const pts = roundedPoints(x, z, bw, bd, Math.min(bw, bd) * 0.32, 3);
-    const drum = snapStorey(y0 + (h - y0) * 0.86, y0);
+    const drum = snapToStoreys(y0 + (h - y0) * 0.86, y0);
     b.prism(pts, y0, drum, { top: 'roofGravel', vBase: y0, perimeter: true, smooth: true });
     b.use(tile, glass);
     const small = scalePoints(pts, x, z, 0.74);
@@ -44,7 +45,7 @@ export function raiseGlassTower(ctx, building) {
     crownBand(ctx, pts, drum - 1, 1, crownTint);
     finishTowerRoof(ctx, building, small, h, { needle: true, plant: false });
     corporateSign(ctx, building, x, z, bw * 0.8, bd, drum - 10);
-  } else if (variant === 2) {
+  } else if (crown === 'wedge') {
     // Deep fins and a roof sliced at a slant.
     const pts = rectPoints(x, z, bw, bd);
     const alongX = rng.chance(0.5);
@@ -57,11 +58,11 @@ export function raiseGlassTower(ctx, building) {
     const hx = alongX ? x - bw / 2 + 2 : x;
     const hz = alongX ? z : z - bd / 2 + 2;
     if (h > 90) ctx.beacon(hx, h + 0.5, hz, 0xff2a1a, 3.6, 1);
-  } else if (variant === 3) {
+  } else if (crown === 'twin') {
     // Twin slabs of different heights joined by a dark glass core.
     const alongX = bw >= bd;
     const gap = 3.5;
-    const hB = snapStorey(y0 + (h - y0) * (0.68 + rng.next() * 0.18), y0);
+    const hB = snapToStoreys(y0 + (h - y0) * (0.68 + rng.next() * 0.18), y0);
     const half = ((alongX ? bw : bd) - gap) / 2;
     const thin = (alongX ? bd : bw) * 0.86;
     const shift = (alongX ? bd : bw) * 0.07;
@@ -77,14 +78,14 @@ export function raiseGlassTower(ctx, building) {
       parapetRoof(b, pts, sh + 1.2, 1.2, 0.4);
       finishTowerRoof(ctx, { ...building, h: sh }, insetPoints(pts, 0.4), sh, { capped: true, helipad: false });
     });
-  } else if (variant === 4) {
+  } else if (crown === 'setback') {
     // Set back three times, a band of light at every step.
     let pts = chamferPoints(x, z, bw, bd, Math.min(bw, bd) * 0.12);
     const fractions = [0.5, 0.3, 0.2];
     let y = y0;
     let scale = 1;
     fractions.forEach((f, k) => {
-      const top = k === fractions.length - 1 ? h : snapStorey(y + (h - y0) * f, y0);
+      const top = k === fractions.length - 1 ? h : snapToStoreys(y + (h - y0) * f, y0);
       b.use(tile, glass);
       b.prism(pts, y, top, { top: 'roofGravel', vBase: y0 });
       crownBand(ctx, pts, top - 0.9, 0.9, crownTint);
@@ -95,17 +96,17 @@ export function raiseGlassTower(ctx, building) {
     });
     finishTowerRoof(ctx, building, scalePoints(pts, x, z, 1 / 0.78), h, { capped: true, needle: h > 120 });
     corporateSign(ctx, building, x, z, bw * 0.6, bd * 0.6, h - 10);
-  } else if (variant === 5) {
+  } else if (crown === 'cone') {
     // An octagonal shaft under a metal cone and needle.
     const pts = ellipsePoints(x, z, bw / 2, bd / 2, 8, Math.PI / 8);
-    const coneStart = snapStorey(y0 + (h - y0) * 0.87, y0);
+    const coneStart = snapToStoreys(y0 + (h - y0) * 0.87, y0);
     b.prism(pts, y0, coneStart, { top: false, vBase: y0, perimeter: true });
     crownBand(ctx, pts, coneStart - 1, 1, crownTint);
     b.use('metalPanel', crownTint);
     b.prism(pts, coneStart, h, { top: false, topScale: 0.28, perimeter: true });
     b.cap(scalePoints(pts, x, z, 0.28), h, true);
     spireNeedle(ctx, b, x, z, h, Math.max(8, h * 0.1), Math.min(bw, bd) * 0.06, crownTint);
-  } else if (variant === 6) {
+  } else if (crown === 'twist') {
     // A stack of floor plates turning a little more at every step: the twist.
     const steps = Math.max(5, Math.min(12, Math.round((h - y0) / 15)));
     const maxTurn = 0.42;
@@ -126,8 +127,8 @@ export function raiseGlassTower(ctx, building) {
   } else {
     // A sky garden two thirds of the way up, and an open crown frame lit at night.
     const pts = chamferPoints(x, z, bw, bd, Math.min(bw, bd) * 0.08);
-    const garden = snapStorey(y0 + (h - y0) * 0.58, y0);
-    const frameBase = snapStorey(h - 9, y0);
+    const garden = snapToStoreys(y0 + (h - y0) * 0.58, y0);
+    const frameBase = snapToStoreys(h - 9, y0);
     b.prism(pts, y0, garden, { top: false, vBase: y0 });
     b.use('greenery', 0x7aa850);
     b.cap(pts, garden, true);
@@ -149,7 +150,7 @@ export function raiseSteppedTower(ctx, building) {
   const { x, z, w, d, h } = building;
   const rng = ctx.rng;
   const b = ctx.solid;
-  const stone = paletteColor('spiresStone', building);
+  const stone = paletteColor('spires', 'stone', building);
   const accent = rng.pick([0xe0c078, 0x6fd3b0, 0x58c4bc, 0xd8a868]);
   const deco = building.variant % 3 === 0;
   stonePodium(ctx, building, 6);
@@ -163,9 +164,9 @@ export function raiseSteppedTower(ctx, building) {
   let y = y0;
   const shrink = 0.8;
   const towardBack = building.variant % 2 === 1;
-  const back = faceOf(0, 0, 1, 1, opposite(building.front));
+  const back = faceOf(0, 0, 1, 1, backSideOf(building));
   for (let k = 0; k < tiers; k += 1) {
-    const top = k === tiers - 1 ? h - 6 : snapStorey(y + (h - y0) * fractions[k], y0);
+    const top = k === tiers - 1 ? h - 6 : snapToStoreys(y + (h - y0) * fractions[k], y0);
     const pts = chamferPoints(cx, cz, bw, bd, Math.min(bw, bd) * 0.1);
     b.use(deco ? 'decoFins' : 'glassFins', deco ? stone : accent);
     b.prism(pts, y, top, { top: false, vBase: y0 });
@@ -201,7 +202,7 @@ export function raiseOfficeSlab(ctx, building) {
   const { x, z, w, d, h } = building;
   const rng = ctx.rng;
   const b = ctx.solid;
-  const stone = paletteColor('spiresStone', building);
+  const stone = paletteColor('spires', 'stone', building);
   const glass = glassTintOf(building);
   stonePodium(ctx, building, 6);
   const alongX = w >= d;
@@ -231,7 +232,7 @@ export function raiseOfficeSlab(ctx, building) {
   b.box(ccx - cw / 2, y0, ccz - cd / 2, ccx + cw / 2, h + 7, ccz + cd / 2, { top: 'roofGravel', vBase: y0 });
   // A lit seam running up the middle of the core's street face.
   b.use('crownLights', 0xffe2b0);
-  const slot = faceOf(ccx, ccz, cw, cd, building.front);
+  const slot = faceOf(ccx, ccz, cw, cd, frontDoorSideOf(building));
   const sx = slot.ax + slot.tx * (slot.length / 2 - 0.6) + slot.nx * 0.06;
   const sz = slot.az + slot.tz * (slot.length / 2 - 0.6) + slot.nz * 0.06;
   b.wall(sx, sz, sx + slot.tx * 1.2, sz + slot.tz * 1.2, y0 + 3, h + 6, { repeatU: 1 });
@@ -248,7 +249,7 @@ export function raiseOfficeSlab(ctx, building) {
     antennaMast(ctx, b, ccx, ccz, h + 7, 14 + rng.next() * 10);
     const sign = ctx.nextSign('spires');
     if (sign) {
-      const face = faceOf(ccx, ccz, cw, cd, building.front);
+      const face = faceOf(ccx, ccz, cw, cd, frontDoorSideOf(building));
       if (face.length > 9) hangWallSign(b, face, sign, h + 1.5, Math.min(face.length * 0.9, 14), Math.min(face.length * 0.9, 14) / 7);
     }
   }
@@ -259,8 +260,8 @@ export function raiseApartmentTower(ctx, building) {
   const { x, z, w, d, h } = building;
   const rng = ctx.rng;
   const b = ctx.solid;
-  const white = paletteColor('marinaWhite', building);
-  const rail = rng.chance(0.5) ? 0xffffff : paletteColor('marinaAccent', building, 1);
+  const white = paletteColor('marina', 'white', building);
+  const rail = rng.chance(0.5) ? 0xffffff : paletteColor('marina', 'accent', building, 1);
   const outerW = w - 4;
   const outerD = d - 4;
   const deep = 1.9;
@@ -270,7 +271,7 @@ export function raiseApartmentTower(ctx, building) {
   const lobbyH = 5;
   const storey = 3.2;
   const crownH = building.variant % 2 === 0 ? 7 : 4;
-  const floors = Math.max(4, Math.floor((h - lobbyH - crownH) / storey));
+  const floors = Math.max(4, storeysForHeight(h - lobbyH - crownH, storey));
   const top = lobbyH + floors * storey;
   // Lobby: glass behind white columns, under the first balcony.
   b.use('lobbyGlass', 0xffffff);
@@ -336,20 +337,20 @@ export function raiseHotel(ctx, building) {
   const { x, z, w, d, h } = building;
   const rng = ctx.rng;
   const b = ctx.solid;
-  const color = paletteColor('lanternColor', building);
+  const color = paletteColor('lantern', 'color', building);
   const neon = mixHex(color, 0xffffff, 0.25);
   const sign = ctx.nextSign('lantern');
   // A two-storey lobby podium with a glass front and a canopy over the entrance.
   const podiumH = 7;
   b.use('podiumShops', 0xfaf4ea);
   b.prism(rectPoints(x, z, w - 1, d - 1), 0, podiumH, { top: 'stone', topTint: 0xefe6d6 });
-  const front = faceOf(x, z, w - 1, d - 1, building.front);
+  const front = faceOf(x, z, w - 1, d - 1, frontDoorSideOf(building));
   lobbyFront(b, front, podiumH, Math.min(14, front.length * 0.5));
   // The slab, its corners traced in neon.
   const bw = w - 3;
   const bd = d - 3;
   const pts = rectPoints(x, z, bw, bd);
-  const top = snapStorey(h - 1.5, podiumH, 3.4);
+  const top = snapToStoreys(h - 1.5, podiumH, 3.4);
   b.use(building.variant % 3 === 2 ? 'hotelGlass' : 'hotelBalconies', color);
   b.prism(pts, podiumH, top + 1.2, { top: false, vBase: podiumH });
   parapetRoof(b, pts, top + 1.2, 1.2, 0.4);
@@ -367,15 +368,13 @@ export function raiseHotel(ctx, building) {
     crownFrame(ctx, insetPoints(pts, 0.5), top + 1.2, top + 6, neon);
   }
   if (sign) {
-    const face = faceOf(x, z, bw, bd, building.front);
+    const face = faceOf(x, z, bw, bd, frontDoorSideOf(building));
     const signW = Math.min(face.length * 0.9, 18);
-    const roofY = crown === 0 ? top + 0.2 : top + 0.2;
-    const along = 1.5 + face.length * 0.5;
     const mid = { x: face.ax + face.tx * face.length / 2 - face.nx * 3, z: face.az + face.tz * face.length / 2 - face.nz * 3 };
-    if (crown !== 0) raiseRooftopSign(b, face, sign, mid.x, mid.z, roofY, signW, signW / 6.5, crown === 2 ? 6.2 : 1.2);
+    if (crown !== 0) raiseRooftopSign(b, face, sign, mid.x, mid.z, top + 0.2, signW, signW / 6.5, crown === 2 ? 6.2 : 1.2);
     else hangWallSign(b, face, sign, top - 4.5, signW, signW / 7);
     const bladeH = Math.min(16, top - podiumH - 4);
-    if (bladeH > 6) hangBladeSign(b, face, sign, podiumH + 2, bladeH, 2.2, face.length * (rng.chance(0.5) ? 0.12 : 0.88) - 0 * along, color);
+    if (bladeH > 6) hangBladeSign(b, face, sign, podiumH + 2, bladeH, 2.2, face.length * (rng.chance(0.5) ? 0.12 : 0.88), color);
   }
   airConUnits(b, rng, x - bw / 2 + 1, z - bd / 2 + 1, x - bw / 2 + 5, z + bd / 2 - 1, top + 0.2, 3);
 }
@@ -385,14 +384,14 @@ export function raiseNeonClub(ctx, building) {
   const { x, z, w, d, h } = building;
   const rng = ctx.rng;
   const b = ctx.solid;
-  const color = paletteColor('lanternColor', building, 2);
+  const color = paletteColor('lantern', 'color', building, 2);
   const neon = mixHex(color, 0xffffff, 0.2);
   const sign = ctx.nextSign('lantern');
   const podiumH = Math.min(h, 10 + rng.next() * 3);
   const pts = rectPoints(x, z, w - 1, d - 1);
   b.use('clubPanels', color);
   b.prism(pts, 0, podiumH, { top: 'roofGravel', vBase: 0 });
-  const front = faceOf(x, z, w - 1, d - 1, building.front);
+  const front = faceOf(x, z, w - 1, d - 1, frontDoorSideOf(building));
   lobbyFront(b, front, 4.5, Math.min(10, front.length * 0.4));
   // Neon bands around the podium.
   for (const y of [podiumH - 0.8, podiumH - 2.2]) neonRing(b, pts, y, 0.3, neon);
@@ -417,71 +416,7 @@ export function raiseNeonClub(ctx, building) {
   else satelliteDishes(b, rng, minX + 1, minZ + 1, maxX - 1, maxZ - 1, h, 2);
 }
 
-// ---- shared tower pieces --------------------------------------------------------------------
-
-/** The white stone podium a downtown tower stands on: shops all round, a glass lobby at the front. */
-export function stonePodium(ctx, building, height) {
-  const { x, z, w, d } = building;
-  const b = ctx.solid;
-  const stone = building.district === 'marina' ? 0xfbfaf6 : building.district === 'lantern' ? 0xfaf0e2 : paletteColor('spiresStone', building);
-  const pts = rectPoints(x, z, w - 1, d - 1);
-  b.use('podiumShops', stone);
-  b.prism(pts, 0, height, { top: false });
-  b.use('stone', stone);
-  b.prism(rectPoints(x, z, w, d), height, height + 0.6, { top: 'stone', topTint: mixHex(stone, 0xd8cdb8, 0.4) });
-  b.use('plain', stone);
-  b.cap(rectPoints(x, z, w, d), height, false);
-  const front = faceOf(x, z, w - 1, d - 1, building.front);
-  lobbyFront(b, front, height, Math.min(14, front.length * 0.45));
-}
-
-/** A glass lobby on a face, with a slim canopy over the doors. */
-function lobbyFront(b, face, height, width) {
-  const mid = face.length / 2;
-  const ax = face.ax + face.tx * (mid - width / 2) + face.nx * 0.08;
-  const az = face.az + face.tz * (mid - width / 2) + face.nz * 0.08;
-  const bx = face.ax + face.tx * (mid + width / 2) + face.nx * 0.08;
-  const bz = face.az + face.tz * (mid + width / 2) + face.nz * 0.08;
-  b.use('lobbyGlass', 0xffffff);
-  b.wall(ax, az, bx, bz, 0, Math.min(height - 0.6, 6), { u0: 0, u1: Math.max(1, Math.round(width / 12)), v0: 0, v1: Math.min(height - 0.6, 6) / 6 });
-  b.use('plain', 0xf4f4f0);
-  const reach = 2.2;
-  const cy = Math.min(height - 1, 4.6);
-  const x0 = Math.min(ax, bx, ax + face.nx * reach, bx + face.nx * reach);
-  const x1 = Math.max(ax, bx, ax + face.nx * reach, bx + face.nx * reach);
-  const z0 = Math.min(az, bz, az + face.nz * reach, bz + face.nz * reach);
-  const z1 = Math.max(az, bz, az + face.nz * reach, bz + face.nz * reach);
-  b.slab(x0, z0, x1, z1, cy, 0.35);
-}
-
-/** A band of crown lighting just proud of an outline: it glows in `tint` after dark. */
-export function crownBand(ctx, points, y, height, tint) {
-  const b = ctx.solid;
-  b.use('crownLights', tint);
-  b.prismWalls(insetPoints(points, -0.12), y, y + height, { perimeter: true });
-}
-
-/** An open crown frame: posts at the outline's corners and a lit ring on top, sky showing through. */
-export function crownFrame(ctx, points, y0, y1, tint) {
-  const b = ctx.solid;
-  b.use('metalPanel', mixHex(tint, 0xffffff, 0.4));
-  for (const [px, pz] of points) b.box(px - 0.45, y0, pz - 0.45, px + 0.45, y1, pz + 0.45, { top: false });
-  const ring = insetPoints(points, -0.3);
-  b.use('crownLights', tint);
-  b.prismWalls(ring, y1 - 1.6, y1, { perimeter: true });
-  const back = insetPoints(points, 0.3);
-  const n = back.length;
-  for (let i = 0; i < n; i += 1) {
-    const a = back[(i + 1) % n];
-    const c = back[i];
-    b.wall(a[0], a[1], c[0], c[1], y1 - 1.6, y1, { repeatU: 1 });
-  }
-  b.use('plain', 0xe8e8e4);
-  for (let i = 0; i < n; i += 1) {
-    const j = (i + 1) % n;
-    b.quad([ring[i][0], y1, ring[i][1]], [ring[j][0], y1, ring[j][1]], [back[j][0], y1, back[j][1]], [back[i][0], y1, back[i][1]], 0, 0, 1, 0.1);
-  }
-}
+// ---- tower pieces (podiums, lobbies, crown bands and frames are shared in buildingShapes.js) ----
 
 /** Thin vertical fins down every face of a rectangular tower, up to a (possibly sloped) top. */
 function towerFins(ctx, cx, cz, bw, bd, y0, topAt, tint) {
@@ -579,7 +514,7 @@ function corporateSign(ctx, building, cx, cz, bw, bd, y) {
   if (building.district !== 'spires' || building.h < 110 || !ctx.rng.chance(0.55)) return;
   const sign = ctx.nextSign('spires');
   if (!sign) return;
-  const face = faceOf(cx, cz, bw, bd, building.front);
+  const face = faceOf(cx, cz, bw, bd, frontDoorSideOf(building));
   const width = Math.min(face.length * 0.62, 24);
   hangWallSign(ctx.solid, face, sign, y, width, width / 7, face.length / 2, 0.25);
 }
@@ -595,26 +530,9 @@ function ringCap(b, outer, inner, y) {
 
 /** The glass colour of a tower, from its district's palette. */
 function glassTintOf(building) {
-  if (building.district === 'lantern') return paletteColor('lanternColor', building, 1);
-  if (building.district === 'marina') return paletteColor('marinaAccent', building);
-  return paletteColor('spiresGlass', building);
-}
-
-/** Round a height to a whole number of storeys above `base`. */
-function snapStorey(y, base, storey = 3.4) {
-  return base + Math.max(1, Math.round((y - base) / storey)) * storey;
-}
-
-function opposite(side) {
-  return { n: 's', s: 'n', e: 'w', w: 'e' }[side] || 'n';
-}
-
-/** Blend two 0xRRGGBB colours. */
-export function mixHex(a, b, t) {
-  const r = Math.round(((a >> 16) & 255) * (1 - t) + ((b >> 16) & 255) * t);
-  const g = Math.round(((a >> 8) & 255) * (1 - t) + ((b >> 8) & 255) * t);
-  const bl = Math.round((a & 255) * (1 - t) + (b & 255) * t);
-  return (r << 16) | (g << 8) | bl;
+  if (building.district === 'lantern') return paletteColor('lantern', 'color', building, 1);
+  if (building.district === 'marina') return paletteColor('marina', 'accent', building);
+  return paletteColor('spires', 'glass', building);
 }
 
 const GLASS_TILES = ['glassGrid', 'glassRibbon', 'glassFins', 'glassSeamless'];

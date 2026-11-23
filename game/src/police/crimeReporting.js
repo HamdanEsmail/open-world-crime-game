@@ -3,11 +3,8 @@
 // passer-by phones it in; gunfire, blasts, killings and anything done to an officer always reach
 // dispatch within seconds. An unwitnessed car theft on an empty street costs nothing.
 import { createPoliceSight, WITNESS_RANGE } from './policeSight.js';
+import { crimeNeedsWitness, crimeAgainstPolice } from './wantedLevelRules.js';
 
-/** Crimes loud or grave enough that somebody always calls them in, police in sight or not. */
-const ALWAYS_REPORTED = { gunfire: true, explosion: true, murder: true, officerAssault: true, officerKilled: true, robbery: true, policeCarTheft: true };
-/** Crimes against the police themselves: the victim is the witness. */
-const AGAINST_OFFICERS = { officerAssault: true, officerKilled: true };
 /** Seconds before a loud crime nobody in uniform saw reaches dispatch, and before a passer-by gets through. */
 const HEARD_DELAY = [2.5, 4.5];
 const PHONE_DELAY = [2.0, 4.0];
@@ -65,13 +62,13 @@ export function createCrimeReporting(game, wanted) {
     if (gap && now - (lastOfType[type] || -1e9) < gap) return;
     lastOfType[type] = now;
     const record = remember(type, x, z, now);
-    if (AGAINST_OFFICERS[type] || sight.policeSawPoint(x, z, WITNESS_RANGE)) {
+    if (crimeAgainstPolice(type) || sight.policeSawPoint(x, z, WITNESS_RANGE)) {
       record.reported = true;
       stats.seenByPolice += 1;
       wanted.report(type, x, z, { victim, witnessed: true, severity });
       return;
     }
-    if (ALWAYS_REPORTED[type]) {
+    if (!crimeNeedsWitness(type)) {
       record.reported = true;
       stats.heard += 1;
       schedule(type, x, z, victim, severity, HEARD_DELAY, 'heard');

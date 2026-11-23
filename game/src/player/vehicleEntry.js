@@ -58,7 +58,8 @@ export function enterOrStealVehicle(game, player, vehicle, options) {
   player.entering = vehicle;
   player.enteringSince = game.time.elapsed;
   game.characters.enterVehicle(character, vehicle, 0, { instant: !!options.instant });
-  if (options.instant) takeTheWheel(game, player, vehicle, options);
+  // Seated at once: take the wheel now, unless the "seated" event already did.
+  if (options.instant && player.entering === vehicle) takeTheWheel(game, player, vehicle, options);
 }
 
 /** The player is in the seat: the vehicle is theirs to drive. */

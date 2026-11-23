@@ -258,12 +258,3 @@ export function setRecordColor(record, value) {
   record.b = _color.b;
   return record;
 }
-
-/** A point in a record's own space (+Z front) turned into world space: writes out.x/y/z. */
-export function recordPointToWorld(record, lx, ly, lz, out) {
-  _position.set(lx, ly, lz).applyMatrix4(_matrix.fromArray(record.m));
-  out.x = _position.x;
-  out.y = _position.y;
-  out.z = _position.z;
-  return out;
-}

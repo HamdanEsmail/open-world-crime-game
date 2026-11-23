@@ -293,7 +293,7 @@ function spawnChaserBehind(m, scene, specId, behind) {
   ride.vehicle.controls.headlights = true;
   ride.bark = false;
   m.pursue(ride.vehicle, { aggression: specId === 'dune_jackal' ? 0.75 : 0.55 });
-  m.marker(ride.vehicle, { label: 'Jackals', kind: 'enemy', color: 0xe4572e, route: false });
+  m.marker(ride.vehicle, { label: 'Jackals', kind: 'enemy', color: 0xe4572e, route: false, beacon: false });
   return ride;
 }
 

@@ -1,12 +1,8 @@
 // How Port Sarab's drivers react to trouble: pulling over for a siren coming up behind, flooring it
 // or bailing out and running when shots ring out or something blows up, speeding off or climbing out
 // to shake a fist when the player rams them, running from a carjacking, and leaving a burning wreck.
+import { pullOverForSiren, bailOutChance, panicRange } from './trafficRules.js';
 
-/** A siren within this distance behind a driver makes it pull over. */
-const SIREN_RANGE = 70;
-const GUNFIRE_RANGE = 60;
-const GUNFIRE_HIT_RANGE = 26;
-const EXPLOSION_RANGE = 90;
 /** Closing speed (m/s) of a hit from the player that counts as being rammed rather than nudged. */
 const RAM_SPEED = 4;
 /** The arm-waving the angry driver makes at the player. */
@@ -71,11 +67,7 @@ export function createTrafficReactions(game, traffic, driverAI) {
     const dz = z - vehicle.pos.z;
     const distance = Math.sqrt(dx * dx + dz * dz);
     const ahead = dx * Math.sin(vehicle.heading) + dz * Math.cos(vehicle.heading) > 0;
-    let bail = 0.22;
-    if (vehicle.speed < 5) bail += 0.25;
-    if (ahead && distance < 30) bail += 0.25;
-    if (distance < 14) bail += 0.15;
-    if (state.driver && Math.random() < bail) {
+    if (state.driver && Math.random() < bailOutChance(vehicle.speed, distance, ahead)) {
       state.mode = 'halt';
       state.haltReason = 'bail';
       return;
@@ -195,14 +187,12 @@ export function createTrafficReactions(game, traffic, driverAI) {
         if (car === siren) continue;
         const rx = siren.pos.x - car.pos.x;
         const rz = siren.pos.z - car.pos.z;
-        if (rx * rx + rz * rz > SIREN_RANGE * SIREN_RANGE) continue;
+        const distanceSq = rx * rx + rz * rz;
+        if (distanceSq > 10000) continue;
         const fx = Math.sin(car.heading);
         const fz = Math.cos(car.heading);
-        const along = rx * fx + rz * fz;
-        const across = rz * fx - rx * fz;
-        if (along > -3 || across > 10 || across < -10) continue;
         const closing = siren.vel.x * fx + siren.vel.z * fz - car.speed;
-        if (closing > 0.5 || along > -25) {
+        if (pullOverForSiren(Math.sqrt(distanceSq), rx * fx + rz * fz, rz * fx - rx * fz, closing)) {
           state.mode = 'yield';
           state.modeTime = 2.6;
         }
@@ -260,13 +250,12 @@ export function createTrafficReactions(game, traffic, driverAI) {
 
   function onGunfire(event) {
     if (!event) return;
-    reactToTrouble(event.x, event.z, GUNFIRE_RANGE, event.hitX, event.hitZ, GUNFIRE_HIT_RANGE, event.shooter);
+    reactToTrouble(event.x, event.z, panicRange('shot'), event.hitX, event.hitZ, panicRange('hit'), event.shooter);
   }
 
   function onExplosion(event) {
     if (!event) return;
-    const range = Math.max(EXPLOSION_RANGE, (event.radius || 0) * 5);
-    reactToTrouble(event.x, event.z, range, undefined, undefined, 0, null);
+    reactToTrouble(event.x, event.z, panicRange('explosion', event.radius), undefined, undefined, 0, null);
   }
 
   /** Everyone near (x, z) (or near where a bullet landed) panics; people already running run on. */

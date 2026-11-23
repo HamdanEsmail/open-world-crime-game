@@ -16,8 +16,8 @@ export const RIVAL_DRIVERS = [
   { name: 'Juno Navarre', skill: 0.95, taunt: 'I don\'t lose on my own streets.', passed: 'Stay in my mirrors.', beaten: 'Huh. Nobody does that.' },
 ];
 
-/** How much tougher than a street car a rival's race-prepared car is. */
-const RIVAL_TOUGHNESS = 2.4;
+/** Share of crash and landing damage a rival's race-prepared car (roll cage, stiff panels) shrugs off. */
+const RIVAL_CRASH_ARMOUR = 0.65;
 
 /** Paint for the rival cars, so each one reads apart on the grid. */
 const RIVAL_PAINT = [0xe4572e, 0x1ba39c, 0xf2a81d, 0x6a3fa0, 0x9bd13a, 0x4d9de0, 0xfff4d6];
@@ -80,9 +80,6 @@ export function createRaceRivalDrivers(game) {
     if (!vehicle) return null;
     vehicle.ai = { owner: 'streetRace', race: race.route.id };
     vehicle.tags.raceRival = true;
-    // Race-prepared: roll cages and stiff panels keep a rival in it after a scrape or a landing.
-    vehicle.maxHealth = vehicle.spec.health * RIVAL_TOUGHNESS;
-    vehicle.health = vehicle.maxHealth;
     let driver = null;
     const characters = game.characters;
     if (characters && characters.spawn) {
@@ -112,8 +109,8 @@ export function createRaceRivalDrivers(game) {
       flipTime: 0,
       bestDistance: Infinity,
       noGain: 0,
-      lastX: slot.x,
-      lastZ: slot.z,
+      recoveries: 0,
+      topPace: 0,
     };
   }
 
@@ -132,7 +129,7 @@ export function createRaceRivalDrivers(game) {
       return;
     }
     if (racer.finished || racer.dnf) {
-      pilot.stopVehicle(vehicle, false);
+      pilot.stopVehicle(vehicle, true);
       return;
     }
     const points = race.points;
@@ -153,6 +150,7 @@ export function createRaceRivalDrivers(game) {
     const dz = target.z - vehicle.pos.z;
     const distance = Math.sqrt(dx * dx + dz * dz);
     const speed = Math.abs(vehicle.speed);
+    if (speed > racer.topPace) racer.topPace = speed;
     const profile = vehicle.dynamics ? vehicle.dynamics.profile : null;
     const grip = profile ? profile.grip : vehicle.spec.grip;
     const braking = profile ? profile.braking : vehicle.spec.braking;
@@ -172,9 +170,9 @@ export function createRaceRivalDrivers(game) {
       aimZ = target.z + (oz / leg) * reach;
     }
 
-    // Swing out past a slower car in the way.
+    // Swing out past a clearly slower car in the way.
     const ahead = pilot.obstacleAhead(vehicle, 16);
-    if (ahead.vehicle && Math.abs(ahead.vehicle.speed) < speed - 1.5 && !target.jump) {
+    if (ahead.vehicle && Math.abs(ahead.vehicle.speed) < speed * 0.85 - 1 && !target.jump) {
       const ax = aimX - vehicle.pos.x;
       const az = aimZ - vehicle.pos.z;
       const reach = Math.hypot(ax, az) || 1;
@@ -182,17 +180,19 @@ export function createRaceRivalDrivers(game) {
       aimZ += (ax / reach) * racer.side * 3.4;
     }
 
-    // Rubber band: a little help when far behind the player, a little lift when far ahead.
+    // Rubber band: a leader far ahead of the player lifts a little; a rival far behind brakes later
+    // and leans harder on the tyres to close the gap.
     const gap = racer.progress - playerProgress;
-    const rubber = Math.max(0.9, Math.min(1.08, 1 - gap / 2600));
-    const skill = racer.skill;
-    let pace = topSpeed * (0.84 + 0.14 * Math.min(1, skill)) * rubber;
-    const gripUse = 0.72 + 0.22 * Math.min(1, skill) + (rubber > 1 ? 0.04 : 0);
+    const lift = gap > 0 ? Math.min(0.1, gap / 2500) : 0;
+    const push = gap < 0 ? Math.min(1, -gap / 1200) : 0;
+    const skill = Math.min(1, racer.skill);
+    let pace = topSpeed * (0.86 + 0.14 * skill) * (1 - lift);
+    const gripUse = 0.74 + 0.2 * skill + 0.12 * push;
     const corner = target.jump ? 27 : Math.sqrt(grip * 9.81 * gripUse * race.cornerRadius[racer.next]);
     const room = Math.max(0, distance - 3);
-    const brakeLimit = Math.sqrt(corner * corner + 2 * braking * (0.5 + 0.25 * Math.min(1, skill)) * room);
+    const brakeLimit = Math.sqrt(corner * corner + 2 * braking * (0.5 + 0.25 * skill + 0.15 * push) * room);
     if (brakeLimit < pace) pace = brakeLimit;
-    pilot.driveToward(vehicle, aimX, aimZ, pace, { aggression: 0.45 + 0.4 * Math.min(1, skill), allowReverse: true });
+    pilot.driveToward(vehicle, aimX, aimZ, pace, { aggression: Math.min(1, 0.45 + 0.4 * skill + 0.2 * push), allowReverse: true });
 
     watchForTrouble(racer, race, dt, distance);
   }
@@ -211,18 +211,26 @@ export function createRaceRivalDrivers(game) {
       racer.noGain += dt;
     }
     const wet = vehicle.dynamics && vehicle.dynamics.inWater;
-    if (racer.stuckTime > 3.5 || racer.flipTime > 1.6 || racer.noGain > 11 || wet) recoverRival(racer, race);
+    if (racer.stuckTime > 2.6 || racer.flipTime > 1.4 || racer.noGain > 9 || wet) recoverRival(racer, race);
   }
 
-  /** Back on the course at the last checkpoint passed, facing the next one, clear of other cars. */
+  /**
+   * Back on the course where the car left it: on the line from the last checkpoint passed to the
+   * next one, level with where it got stuck, facing the way the race goes, clear of other cars.
+   */
   function recoverRival(racer, race) {
     const vehicle = racer.vehicle;
     const points = race.points;
     const from = racer.next > 0 ? points[racer.next - 1] : race.grid;
     const to = points[racer.next];
     const heading = Math.atan2(to.x - from.x, to.z - from.z);
-    let x = from.x;
-    let z = from.z;
+    const legX = to.x - from.x;
+    const legZ = to.z - from.z;
+    const legSq = legX * legX + legZ * legZ || 1;
+    let t = ((vehicle.pos.x - from.x) * legX + (vehicle.pos.z - from.z) * legZ) / legSq;
+    t = t < 0 ? 0 : t > 0.9 ? 0.9 : t;
+    let x = from.x + legX * t;
+    let z = from.z + legZ * t;
     const sideX = -Math.cos(heading);
     const sideZ = Math.sin(heading);
     for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -233,6 +241,7 @@ export function createRaceRivalDrivers(game) {
     }
     game.vehicles.place(vehicle, x, z, heading);
     game.vehicles.autopilot.reset(vehicle);
+    racer.recoveries += 1;
     racer.stuckTime = 0;
     racer.flipTime = 0;
     racer.noGain = 0;
@@ -286,6 +295,13 @@ export function createRaceRivalDrivers(game) {
     racer.driver = null;
     racer.vehicle = null;
   }
+
+  /** Race-prepared cars: a rival keeps most of what a crash or a hard landing would have taken. */
+  game.events.on('vehicle:damaged', (event) => {
+    const vehicle = event.vehicle;
+    if (!vehicle || !vehicle.tags.raceRival || vehicle.wrecked || event.kind !== 'crash') return;
+    vehicle.health = Math.min(vehicle.maxHealth, Math.max(1, vehicle.health + event.amount * RIVAL_CRASH_ARMOUR));
+  });
 
   return { prepareRaceLine, spawnRival, driveRival, measureProgress, checkpointPassed, recoverRival, releaseRival };
 }

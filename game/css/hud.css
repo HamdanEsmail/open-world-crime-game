@@ -490,6 +490,33 @@ body:has(#phone-handler-calls:not([hidden])) #hud-district-street-name { opacity
 .subtitle.is-new { animation: fade-up 0.35s ease both; }
 .subtitle-speaker { margin-right: calc(9 * var(--u)); font-weight: 800; letter-spacing: 0.14em; color: var(--sand); }
 
+/* Side-job lines in the centre (3, 2, 1, GO!, LAP 2, STUNT JUMP 34 m, FARE $103). */
+#hud-activity-banner { left: 0; right: 0; top: 24%; display: flex; justify-content: center; text-align: center; }
+body:has(#mission-result-banner:not([hidden])) #hud-activity-banner { opacity: 0; }
+.activity-line {
+  padding: calc(10 * var(--u)) calc(60 * var(--u)) calc(12 * var(--u));
+  background: radial-gradient(ellipse at center, rgba(14, 27, 42, 0.55) 0%, rgba(14, 27, 42, 0.25) 55%, rgba(14, 27, 42, 0) 72%);
+}
+.activity-line-text {
+  font-size: calc(66 * var(--u));
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  margin-right: -0.12em;
+  white-space: nowrap;
+  color: var(--cream);
+  text-shadow: var(--outline), 0 calc(4 * var(--u)) 0 rgba(8, 14, 22, 0.45);
+}
+.activity-line.is-long .activity-line-text { font-size: calc(48 * var(--u)); letter-spacing: 0.08em; margin-right: -0.08em; }
+.activity-line.is-count .activity-line-text { font-size: calc(120 * var(--u)); letter-spacing: 0.04em; margin-right: -0.04em; }
+.activity-line[data-kind="good"] .activity-line-text { color: #ffd36b; text-shadow: var(--outline), 0 calc(4 * var(--u)) 0 rgba(8, 14, 22, 0.45), 0 0 calc(26 * var(--u)) rgba(233, 180, 76, 0.55); }
+.activity-line[data-kind="bad"] .activity-line-text { color: #ff7a57; text-shadow: var(--outline), 0 calc(4 * var(--u)) 0 rgba(8, 14, 22, 0.45), 0 0 calc(22 * var(--u)) rgba(228, 87, 46, 0.5); }
+.activity-line-sub { margin-top: calc(8 * var(--u)); font-size: calc(17 * var(--u)); font-weight: 800; letter-spacing: 0.22em; color: var(--cream); text-shadow: var(--outline); }
+.activity-line.is-showing { animation: activity-pop 0.32s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+.activity-line.is-leaving { animation: activity-out 0.26s ease forwards; }
+@keyframes activity-pop { 0% { opacity: 0; transform: scale(1.45); } 100% { opacity: 1; transform: none; } }
+@keyframes activity-out { 100% { opacity: 0; transform: scale(0.92); } }
+
 /* Reticle, hit marker and the damage glows. */
 #hud-crosshair { left: 50%; top: 50%; width: calc(40 * var(--u)); height: calc(40 * var(--u)); transform: translate(-50%, -50%); }
 .reticle, .hit-marker { position: absolute; inset: 0; }

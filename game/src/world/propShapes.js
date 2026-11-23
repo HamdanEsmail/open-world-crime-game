@@ -212,9 +212,3 @@ export function rgb(hex) {
   const c = new THREE.Color(hex);
   return [c.r, c.g, c.b];
 }
-
-/** Scale a colour value (hex or list) by `k` and return it as a list. */
-export function shade(value, k) {
-  const c = Array.isArray(value) ? value : rgb(value);
-  return [c[0] * k, c[1] * k, c[2] * k];
-}

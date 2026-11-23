@@ -47,17 +47,18 @@ export function laneSpot(m, x, z, { ahead = 0, maxDistance = 160, filter = null,
 
 /**
  * Like laneSpot, but on the outer lane and slid over to the kerb: where a car is parked. With
- * `facing` (a heading) only lanes running that way are considered.
+ * `facing` (a heading) only lanes running that way are considered; `shift` (0..1) is how far
+ * toward the kerb (0 keeps the lane's centre line, where an AI driver can pull up cleanly).
  * @returns {{x:number, z:number, heading:number, lane:Object|null}}
  */
-export function kerbSpot(m, x, z, { ahead = 0, maxDistance = 160, facing = null } = {}) {
+export function kerbSpot(m, x, z, { ahead = 0, maxDistance = 160, facing = null, shift = 1 } = {}) {
   const outer = (lane) => lane.index === lane.edge.lanesEachWay - 1;
   const spot = laneSpot(m, x, z, { ahead, maxDistance, filter: outer, facing });
   if (!spot.lane) return spot;
   const edge = spot.lane.edge;
   const laneWidth = m.game.roads.laneWidth || 3.5;
   const fromCentre = edge.median / 2 + laneWidth * (spot.lane.index + 0.5);
-  const toKerb = Math.max(0, edge.half - 1.4 - fromCentre);
+  const toKerb = Math.max(0, edge.half - 1.4 - fromCentre) * shift;
   // The right-hand side of travel is (-dirZ, dirX).
   spot.x += -spot.lane.dirZ * toKerb;
   spot.z += spot.lane.dirX * toKerb;
@@ -277,7 +278,7 @@ export function markFoes(m, people, { label = 'Jackal', color = 0xe4572e } = {})
   const tracked = [];
   const marks = {
     add(person) {
-      tracked.push({ person, marker: m.marker(person, { label, color, kind: 'enemy', route: false, radius: 1.2 }) });
+      tracked.push({ person, marker: m.marker(person, { label, color, kind: 'enemy', route: false, radius: 1.2, beacon: false }) });
     },
     refresh() {
       for (const entry of tracked) {

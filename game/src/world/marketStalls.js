@@ -4,13 +4,10 @@
 // Tower and filling the Grand Souk's great square. Stalls and crates break when a car ploughs through.
 import { createPropRecord } from './propInstancing.js';
 import {
-  buildLaneAwning, buildMarketStall, buildLaneGoods, buildRugRail, buildCanopyPole, buildLanternCable,
-  buildHangingLantern,
+  buildLaneAwning, buildMarketStall, buildLaneGoods, buildRugRail, buildCanopyPole, buildHangingLantern,
 } from './marketStallModels.js';
+import { AWNING_TINTS, marketAwningStripes, soukLanternGlass, propBreaksUnderImpact } from './streetFurnitureRules.js';
 
-/** Awning colours: coral, saffron, teal, indigo, pomegranate, leaf green, rose. */
-const AWNING_TINTS = [0xe4572e, 0xf2a516, 0x1ba39c, 0x3d4fa8, 0xb3243a, 0x4f9a3a, 0xe0608a];
-const LANTERN_TINTS = [0xffb347, 0xff5a3c, 0x2ec4b6, 0x9b5de5, 0xffd23f, 0x3ddc84, 0xff70a6];
 const STALL_GOODS = ['fruit', 'spice', 'brass'];
 const STALL_SIZE = { halfX: 1.55, halfZ: 1.2 };
 const LANTERN_GLOW_EVERY = 3;
@@ -23,7 +20,7 @@ export function createMarketStalls(game, kit, printed) {
   const rng = kit.rng('souk');
   const city = game.city;
   const map = kit.map;
-  const lists = { awning: [], stallFruit: [], stallSpice: [], stallBrass: [], laneGoods: [], rugRail: [], canopyPole: [], lanternCable: [], hangingLantern: [] };
+  const lists = { awning: [], stallFruit: [], stallSpice: [], stallBrass: [], laneGoods: [], rugRail: [], canopyPole: [], hangingLantern: [] };
   let lanternCount = 0;
 
   for (const block of city.blocks) {
@@ -46,8 +43,7 @@ export function createMarketStalls(game, kit, printed) {
   kit.addSet({ name: 'laneGoods', geometry: buildLaneGoods(), material: prop, records: lists.laneGoods, maxRange: 110 });
   kit.addSet({ name: 'rugRail', geometry: buildRugRail(), material: prop, records: lists.rugRail, maxRange: 130 });
   kit.addSet({ name: 'canopyPole', geometry: buildCanopyPole(), material: prop, records: lists.canopyPole, maxRange: 170 });
-  kit.addSet({ name: 'lanternCable', geometry: buildLanternCable(), material: prop, records: lists.lanternCable, maxRange: 170 });
-  kit.addSet({ name: 'hangingLantern', geometry: buildHangingLantern(), material: prop, records: lists.hangingLantern, maxRange: 180 });
+  kit.addSet({ name: 'hangingLantern', geometry: buildHangingLantern(), material: prop, records: lists.hangingLantern, maxRange: 160 });
 
   /** The lanes of a block: pairs of neighbouring buildings with a 2.5 to 11 m gap and a long shared side. */
   function findLanes(buildings) {
@@ -83,14 +79,14 @@ export function createMarketStalls(game, kit, printed) {
     const at = (along, across) => (lane.alongZ ? { x: lane.center + across, z: along } : { x: along, z: lane.center + across });
     const awningTop = Math.min(lane.height - 0.6, 4.7);
     if (awningTop > 3.3) {
-      for (let along = lane.from + 2; along < lane.to - 1.5; along += rng.range(5.5, 8)) {
-        if (!rng.chance(0.72)) continue;
+      for (let along = lane.from + 2; along < lane.to - 1.5; along += rng.range(4.2, 6.5)) {
+        if (!rng.chance(0.85)) continue;
         const p = at(along, 0);
-        lists.awning.push(createPropRecord({ kind: 'awning', x: p.x, y: kit.ground(p.x, p.z) + rng.range(3.3, awningTop), z: p.z, yaw, sx: span, sy: 1, sz: 1, color: rng.pick(AWNING_TINTS), footprint: 0 }));
+        lists.awning.push(createPropRecord({ kind: 'awning', x: p.x, y: kit.ground(p.x, p.z) + rng.range(3.3, awningTop), z: p.z, yaw, sx: span, sy: 1, sz: 1, color: marketAwningStripes(rng.next()), footprint: 0 }));
       }
     }
-    if (lane.height > 6 && rng.chance(0.45)) {
-      for (let along = lane.from + 4; along < lane.to - 3; along += rng.range(10, 15)) {
+    if (lane.height > 5.8 && rng.chance(0.6)) {
+      for (let along = lane.from + 4; along < lane.to - 3; along += rng.range(9, 13)) {
         const p = at(along, 0);
         hangLanternString(p.x, p.z, yaw, span, kit.ground(p.x, p.z) + Math.min(lane.height - 0.4, 5.4));
       }
@@ -107,17 +103,20 @@ export function createMarketStalls(game, kit, printed) {
     }
   }
 
-  /** A string of 5 to 7 lanterns across a gap `span` wide at height `y`, centred on (x, z). */
+  /**
+   * A string of lanterns across a gap `span` wide at height `y`, centred on (x, z): each lantern carries
+   * its own stretch of cable, tilted to follow the sag, so together they draw the sagging line.
+   */
   function hangLanternString(x, z, yaw, span, y) {
-    lists.lanternCable.push(createPropRecord({ kind: 'lanternCable', x, y, z, yaw, sx: span, sy: 1, sz: 1, footprint: 0 }));
-    const count = Math.max(3, Math.round(span / 1.3));
+    const count = Math.max(3, Math.ceil(span / 1.35));
     const cos = Math.cos(yaw);
     const sin = Math.sin(yaw);
     for (let i = 0; i < count; i += 1) {
       const u = (i + 0.5) / count;
       const lx = (u - 0.5) * span;
       const sagY = -0.45 * (1 - (2 * u - 1) * (2 * u - 1));
-      const lantern = createPropRecord({ kind: 'hangingLantern', x: x + lx * cos, y: y + sagY, z: z - lx * sin, yaw: rng.range(0, 6.28), scale: rng.range(0.9, 1.2), color: rng.pick(LANTERN_TINTS), footprint: 0 });
+      const slope = (1.8 * (2 * u - 1)) / span;
+      const lantern = createPropRecord({ kind: 'hangingLantern', x: x + lx * cos, y: y + sagY, z: z - lx * sin, yaw, roll: Math.atan(slope), scale: rng.range(0.95, 1.15), color: soukLanternGlass(rng.next()), footprint: 0 });
       lists.hangingLantern.push(lantern);
       lanternCount += 1;
       if (lanternCount % LANTERN_GLOW_EVERY === 0) {
@@ -137,7 +136,7 @@ export function createMarketStalls(game, kit, printed) {
     for (const k of [-1, 0, 1]) map.take(x + (alongX ? k * 1.2 : 0), z + (alongX ? 0 : k * 1.2), 0.5);
     const y = kit.ground(x, z);
     const record = createPropRecord({ kind: 'laneGoods', x, y, z, yaw: facing, footprint: 0.45 });
-    record.def = { fall: 'fly', height: 0.9 };
+    record.def = { fall: propBreaksUnderImpact('laneGoods'), height: 0.9 };
     kit.addCollider(record, { type: 'box', minX: x - hx, maxX: x + hx, minZ: z - hz, maxZ: z + hz, y0: y, y1: y + 0.9, kind: 'crate', breakable: true });
     lists.laneGoods.push(record);
     return record;
@@ -173,7 +172,7 @@ export function createMarketStalls(game, kit, printed) {
     const y = kit.ground(x, z);
     const kind = goods === 'fruit' ? 'stallFruit' : goods === 'spice' ? 'stallSpice' : 'stallBrass';
     const record = createPropRecord({ kind, x, y, z, yaw, color, footprint: 1.0 });
-    record.def = { fall: 'fly', height: 2.6, heavy: true };
+    record.def = { fall: propBreaksUnderImpact('stall'), height: 2.6, heavy: true };
     kit.addCollider(record, { type: 'box', minX: x - hx, maxX: x + hx, minZ: z - hz, maxZ: z + hz, y0: y, y1: y + 2.7, kind: 'stall', breakable: true });
     if (printed && rng.chance(0.3)) {
       const board = goods === 'fruit' ? 'fruit' : goods === 'spice' ? rng.pick(['spices', 'tea', 'sweets']) : rng.pick(['copper', 'rugs', 'juice']);
@@ -198,7 +197,7 @@ export function createMarketStalls(game, kit, printed) {
     if (width < 10) return;
     const rowOffset = Math.min(width / 2 - 1.6, 5.5);
     const center = alongX ? (lot.z0 + lot.z1) / 2 : (lot.x0 + lot.x1) / 2;
-    const color = rng.pick(AWNING_TINTS);
+    const color = marketAwningStripes(rng.next());
     for (const side of [-1, 1]) {
       for (let s = 2.5; s < length - 2.5; s += 3.4) {
         if (!rng.chance(density)) continue;
@@ -207,7 +206,7 @@ export function createMarketStalls(game, kit, printed) {
         const x = alongX ? along : across;
         const z = alongX ? across : along;
         const yaw = alongX ? (side > 0 ? Math.PI : 0) : (side > 0 ? -Math.PI / 2 : Math.PI / 2);
-        placeStall(x, z, yaw, rng.chance(0.5) ? color : rng.pick(AWNING_TINTS));
+        placeStall(x, z, yaw, rng.chance(0.5) ? color : marketAwningStripes(rng.next()));
       }
     }
     const aisle = rowOffset * 2 - 1.4;
@@ -216,7 +215,7 @@ export function createMarketStalls(game, kit, printed) {
       const x = alongX ? along : center;
       const z = alongX ? center : along;
       if (rng.chance(0.6)) {
-        lists.awning.push(createPropRecord({ kind: 'awning', x, y: kit.ground(x, z) + 3.3, z, yaw: alongX ? Math.PI / 2 : 0, sx: aisle + 1.6, color: rng.pick(AWNING_TINTS), footprint: 0 }));
+        lists.awning.push(createPropRecord({ kind: 'awning', x, y: kit.ground(x, z) + 3.3, z, yaw: alongX ? Math.PI / 2 : 0, sx: aisle + 1.6, color: marketAwningStripes(rng.next()), footprint: 0 }));
       } else {
         hangLanternString(x, z, alongX ? Math.PI / 2 : 0, aisle + 1.2, kit.ground(x, z) + 4.3);
       }
@@ -245,7 +244,7 @@ export function createMarketStalls(game, kit, printed) {
       for (let x = lot.x0 + 5; x < lot.x1 - 4; x += 3.5) {
         if (Math.abs(x - cx) < 13 && Math.abs(row.z - cz) < 12) continue;
         if (!rng.chance(0.82)) continue;
-        placeStall(x, row.z, row.facing, rng.pick(AWNING_TINTS));
+        placeStall(x, row.z, row.facing, marketAwningStripes(rng.next()));
       }
     }
     // Aisles: between each row facing south and the next row facing north.
@@ -257,7 +256,7 @@ export function createMarketStalls(game, kit, printed) {
       const span = z1 - z0 + 2.2;
       for (let x = lot.x0 + 6; x < lot.x1 - 5; x += 4.6) {
         if (Math.abs(x - cx) < 14 && Math.abs(az - cz) < 13) continue;
-        if (rng.chance(0.7)) lists.awning.push(createPropRecord({ kind: 'awning', x, y: kit.ground(x, az) + 3.35, z: az, yaw: Math.PI / 2, sx: span, color: rng.pick(AWNING_TINTS), footprint: 0 }));
+        if (rng.chance(0.7)) lists.awning.push(createPropRecord({ kind: 'awning', x, y: kit.ground(x, az) + 3.35, z: az, yaw: Math.PI / 2, sx: span, color: marketAwningStripes(rng.next()), footprint: 0 }));
       }
       for (let x = lot.x0 + 8; x < lot.x1 - 6; x += 13) {
         if (Math.abs(x - cx) < 14 && Math.abs(az - cz) < 13) continue;

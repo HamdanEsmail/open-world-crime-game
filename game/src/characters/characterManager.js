@@ -230,9 +230,11 @@ export function createCharacterManager(game, options = {}) {
       flinch(body.anim, dirX * c - dirZ * s, dirX * s + dirZ * c, Math.max(0.35, amount / 28) * (info.headshot ? 1.4 : 1));
       if ((body.mode === 'lying' || body.mode === 'ragdoll') && kind === 'bullet') kickRagdoll(body, dirX * 0.8, 0.3, dirZ * 0.8);
     }
-    if (kind === 'explosion' && character.health > 0) {
+    // A blast throws the person, unless the caller says they were sheltered (noThrow) or this same
+    // blast already threw them a moment ago (a knockDown and a damage call for one explosion).
+    if (kind === 'explosion' && character.health > 0 && info.noThrow !== true && body && now() - body.motion.lastThrowTime >= BLAST_WINDOW) {
       const push = Math.min(12, 3 + amount * 0.12);
-      knockDown(character, dirX * push, 2.5 + push * 0.35, dirZ * push, { source: info.source });
+      knockDown(character, dirX * push, 2.5 + push * 0.35, dirZ * push, { source: info.source, blast: true });
     }
     if (character.health <= 0) kill(character, info);
     return lost;
@@ -260,8 +262,10 @@ export function createCharacterManager(game, options = {}) {
     if (body.mode === 'ragdoll' || body.mode === 'lying') return;
     const dirX = info.dirX || 0;
     const dirZ = info.dirZ || 0;
-    const push = kind === 'melee' ? 2.6 : kind === 'explosion' ? 6 : kind === 'vehicle' ? 4 : kind === 'fall' ? 0.3 : 1.7;
-    launch(character, dirX * push, kind === 'explosion' ? 4 : 0.5, dirZ * push, { swept: false });
+    const blast = kind === 'explosion' && info.noThrow !== true;
+    const push = kind === 'melee' ? 2.6 : blast ? 6 : kind === 'vehicle' ? 4 : kind === 'fall' ? 0.3 : 1.7;
+    launch(character, dirX * push, blast ? 4 : 0.5, dirZ * push, { swept: false });
+    body.motion.lastThrowTime = now();
   }
 
   /**
@@ -275,10 +279,15 @@ export function createCharacterManager(game, options = {}) {
       exitVehicle(character, { thrown: true });
       return;
     }
+    // One explosion throws a person once: a second throw inside the window after a blast is the same blast.
+    const time = now();
+    if (time - body.motion.lastBlastTime < BLAST_WINDOW && !options.match) return;
+    if (options.blast) body.motion.lastBlastTime = time;
     if (body.boarding && body.boarding.phase === 'approach') cancelApproach(character, body);
     const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
     if (body.mode === 'ragdoll' || body.mode === 'lying') {
       kickRagdoll(body, vx, vy, vz, !!options.match);
+      body.motion.lastThrowTime = time;
       return;
     }
     if (character.alive && staggersOnly(speed) && body.mode === 'foot') {
@@ -291,6 +300,7 @@ export function createCharacterManager(game, options = {}) {
       return;
     }
     launch(character, vx, vy, vz, options);
+    body.motion.lastThrowTime = time;
     game.events.emit('character:knockedDown', { character, source: options.source || null });
   }
 
@@ -494,6 +504,11 @@ export function createCharacterManager(game, options = {}) {
     game.events.emit('character:revived', { character });
   }
 
+  /** The game clock in seconds. */
+  function now() {
+    return game.time ? game.time.elapsed : performance.now() / 1000;
+  }
+
   function isInvulnerable(character) {
     return !!(character.tags && character.tags.invulnerable === true);
   }
@@ -654,6 +669,8 @@ const DEFAULT_FACTION = { player: 'player', civilian: 'civilian', officer: 'poli
 const RECOIL = { pistol: 0.7, smg: 0.32, rifle: 0.45, shotgun: 1.0, bat: 0 };
 const ANIMATE_EVERY_OTHER2 = 65 * 65;
 const NOT_DRAWN2 = 170 * 170;
+/** Seconds within which one explosion's knockDown and damage calls throw a person only once. */
+const BLAST_WINDOW = 0.3;
 const _zero = new THREE.Vector3();
 const _hit = { carry: 0, lift: 0, swept: false, harm: 0 };
 const _footstep = { character: null, x: 0, z: 0, side: 0, speed: 0, surface: 'road' };

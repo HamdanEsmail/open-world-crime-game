@@ -86,9 +86,9 @@ export function createCrewVoice(m) {
     get busy() {
       return speaking > 0;
     },
-    /** A wait that resolves once everything said through this voice has been heard. */
-    quiet() {
-      return m.until(() => speaking === 0);
+    /** A wait that resolves once everything said through this voice has been heard (or `most` seconds pass). */
+    quiet(most = 8) {
+      return m.any([m.until(() => speaking === 0), m.seconds(most)]);
     },
   };
   return voice;

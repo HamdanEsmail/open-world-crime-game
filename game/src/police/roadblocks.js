@@ -7,10 +7,8 @@
 import { createRoadblockSitePlanner } from './roadblockSitePlanner.js';
 import { createRoadblockBarriers } from './roadblockBarriers.js';
 import { createSpikeStrips } from './spikeStrips.js';
+import { roadblocksAtStars, spikeStripsAtStars, officersAtRoadblock, secondsToNextRoadblock, roadblockGapSide } from './policeHeavyResponseRules.js';
 
-const MIN_STARS = 3;
-const SPIKES_FROM_STARS = 4;
-const INTERVAL = [20, 35];
 const RETRY_SECONDS = 2.5;
 const MAX_ALIVE = 2;
 const LIFETIME = 90;
@@ -50,6 +48,7 @@ export function createRoadblocks(game) {
   let wasChasing = false;
   let nextId = 1;
   const keepAway = [];
+  const contacts = [];
 
   game.events.on('vehicle:despawned', (e) => forgetEntity(e && e.vehicle, 'cars'));
   game.events.on('character:despawned', (e) => forgetEntity(e && e.character, 'officers'));
@@ -61,7 +60,7 @@ export function createRoadblocks(game) {
     const level = wantedLevel();
     const player = game.player;
     const vehicle = player ? player.vehicle : null;
-    const chasing = system.enabled && level >= MIN_STARS && !!vehicle && player.state !== 'down';
+    const chasing = system.enabled && roadblocksAtStars(level) && !!vehicle && player.state !== 'down';
     if (chasing && !wasChasing) timer = randomInterval() * 0.6;
     wasChasing = chasing;
     if (chasing && system.list.length < MAX_ALIVE) planAhead(dt, vehicle, level);
@@ -96,7 +95,7 @@ export function createRoadblocks(game) {
     if (result === 'pending') return;
     system.planning = false;
     if (result === 'found') {
-      build(planner.site, level >= SPIKES_FROM_STARS, null, level);
+      build(planner.site, spikeStripsAtStars(level), null, level);
       timer = randomInterval();
     } else {
       timer = RETRY_SECONDS;
@@ -125,7 +124,7 @@ export function createRoadblocks(game) {
     // A divided road is closed on our side; an undivided one from kerb to kerb.
     const s0 = edge.median > 0 ? edge.median / 2 + 0.3 : -edge.half + 0.3;
     const s1 = edge.half - 0.3;
-    const gapRight = gapSide ? gapSide === 'right' : Math.random() < 0.5;
+    const gapRight = (gapSide || roadblockGapSide(Math.random())) === 'right';
     const toward = gapRight ? -1 : 1;
     const gapEdge = gapRight ? s1 - GAP : s0 + GAP;
     const farEdge = gapRight ? s0 : s1;
@@ -135,7 +134,7 @@ export function createRoadblocks(game) {
       x: 0, z: 0, dirX: dX, dirZ: dZ, rightX: rX, rightZ: rZ, centreX, centreZ,
       heading: Math.atan2(dX, dZ), facing: Math.atan2(-dX, -dZ),
       spanMid: (s0 + s1) / 2, spanHalf: (s1 - s0) / 2 + 1,
-      street: '', district: '', spikes: !!spikes, gapSide: gapRight ? 'right' : 'left',
+      street: '', district: '', spikes: !!spikes, gapSide: gapRight ? 'right' : 'left', gapX: 0, gapZ: 0,
       cars: [], officers: [], barriers: [], strip: null, marker: null,
       age: 0, distance: Infinity, along: -Infinity, lastAlong: null, breached: false, retiring: false, retireTime: 0,
     };
@@ -144,7 +143,7 @@ export function createRoadblocks(game) {
 
     // Two cruisers nose to nose, tilted toward the oncoming driver; the near one's tail marks the gap.
     const nearSpec = specOf('pspd_interceptor');
-    const farId = level >= SPIKES_FROM_STARS && Math.random() < 0.5 ? 'pspd_enforcer' : 'pspd_interceptor';
+    const farId = spikeStripsAtStars(level) && Math.random() < 0.5 ? 'pspd_enforcer' : 'pspd_interceptor';
     const farSpec = specOf(farId);
     const cos = Math.cos(NOSE_ANGLE);
     const sin = Math.sin(NOSE_ANGLE);
@@ -175,6 +174,10 @@ export function createRoadblocks(game) {
     point(gapEdge + toward * 0.9, -6.5, spot);
     addBarrier(roadblock, spot.x, spot.z, roadblock.heading - toward * 0.35);
 
+    // The middle of the gap, on the line of the cars: where a skilled driver aims.
+    point(gapEdge - toward * (GAP / 2), 0, spot);
+    roadblock.gapX = spot.x;
+    roadblock.gapZ = spot.z;
     // From four stars a stinger across the gap, a few metres in front of the cars.
     if (spikes) {
       point(gapEdge - toward * (GAP / 2), -5.5, spot);
@@ -182,7 +185,7 @@ export function createRoadblocks(game) {
     }
 
     // Officers behind the cars, guns toward the oncoming driver.
-    const officerCount = level >= SPIKES_FROM_STARS ? 3 : 2;
+    const officerCount = officersAtRoadblock(level);
     const posts = [meet + toward * 1.3, meet - toward * 1.8, meet + toward * 3.6];
     for (let k = 0; k < officerCount; k += 1) {
       point(posts[k], 3.4 + (k % 2) * 0.8, spot);
@@ -205,15 +208,32 @@ export function createRoadblocks(game) {
     return roadblock;
   }
 
-  /** Park one cruiser with its nose at `nose`, pointing across the road (sign) and tilted toward the driver. */
+  /**
+   * Park one cruiser with its nose at `nose`, pointing across the road (sign) and tilted toward the
+   * driver. Where its tail would sit on a median palm or a lamp it slides in toward its partner and
+   * back behind it, so the two stand staggered instead.
+   */
   function parkCruiser(roadblock, specId, spec, nose, sign, cos, sin, rX, rZ, dX, dZ) {
     if (!game.vehicles || !spec) return;
     const fX = rX * sign * cos - dX * sin;
     const fZ = rZ * sign * cos - dZ * sin;
+    const heading = Math.atan2(fX, fZ);
     const back = spec.length / 2 + 0.15;
-    const vehicle = game.vehicles.spawn(specId, {
-      x: nose.x - fX * back, z: nose.z - fZ * back, heading: Math.atan2(fX, fZ), faction: 'police', parked: true,
-    });
+    let x = nose.x - fX * back;
+    let z = nose.z - fZ * back;
+    if (game.colliders && game.colliders.boxContacts) {
+      for (let step = 0; step <= 8; step += 1) {
+        const slide = step * 0.45;
+        const cx = x + fX * slide + dX * slide * 1.3;
+        const cz = z + fZ * slide + dZ * slide * 1.3;
+        if (game.colliders.boxContacts(cx, cz, spec.width / 2 + 0.1, spec.length / 2 + 0.1, heading, 0.1, 1.6, contacts).length === 0) {
+          x = cx;
+          z = cz;
+          break;
+        }
+      }
+    }
+    const vehicle = game.vehicles.spawn(specId, { x, z, heading, faction: 'police', parked: true });
     if (!vehicle) return;
     vehicle.controls.siren = true;
     vehicle.controls.handbrake = true;
@@ -324,8 +344,8 @@ export function createRoadblocks(game) {
     const o = options || {};
     const site = planner.siteAt(x, z, heading);
     if (!site) return null;
-    const level = typeof o.stars === 'number' ? o.stars : Math.max(MIN_STARS, wantedLevel());
-    return build(site, o.spikes !== undefined ? !!o.spikes : level >= SPIKES_FROM_STARS, o.gapSide || null, level);
+    const level = typeof o.stars === 'number' ? o.stars : Math.max(3, wantedLevel());
+    return build(site, o.spikes !== undefined ? !!o.spikes : spikeStripsAtStars(level), o.gapSide || null, level);
   }
 
   /** Plan the next roadblock now instead of waiting for the timer. */
@@ -364,5 +384,5 @@ export function createRoadblocks(game) {
 }
 
 function randomInterval() {
-  return INTERVAL[0] + Math.random() * (INTERVAL[1] - INTERVAL[0]);
+  return secondsToNextRoadblock(Math.random());
 }

@@ -3,13 +3,7 @@
 // Trust at zero and the crew smells a cop (the job is blown); badge at zero and Dahan cuts him loose.
 // Becomes game.story, which also keeps the saved story flags, the ending, the cast and the line queue.
 import { STORY_CAST, spawnCast, speakerOf, createDialogueQueue } from './storyCast.js';
-
-/** Both halves of the meter start here, out of 100. */
-const STARTING_COVER = 50;
-/** Where crew trust settles after the crew has blown a job on him: Faris talks them round. */
-const SECOND_CHANCE_TRUST = 12;
-/** The vault's two endings need at least this much of their side. */
-const ENDING_THRESHOLD = 35;
+import { endingsAllowed, crewSmellsACop, handlerCutsLoose, clampCover, coverToastText, STARTING_COVER, SECOND_CHANCE_TRUST } from './coverMeterRules.js';
 
 /**
  * Create game.story.
@@ -58,10 +52,10 @@ export function createCoverMeter(game) {
     spawnCast: (castId, x, z, heading) => spawnCast(game, castId, x, z, heading),
     say: (lines, owner) => dialogue.say(lines, owner),
     get canCallItIn() {
-      return story.badge >= ENDING_THRESHOLD && !story.flags.cutLoose;
+      return endingsAllowed(story.crewTrust, story.badge).callItIn && !story.flags.cutLoose;
     },
     get canTakeTheGold() {
-      return story.crewTrust >= ENDING_THRESHOLD;
+      return endingsAllowed(story.crewTrust, story.badge).takeTheGold;
     },
 
     update(dt) {
@@ -82,8 +76,8 @@ export function createCoverMeter(game) {
     },
     deserialize(data) {
       if (!data) return;
-      story.crewTrust = clampCover(data.crewTrust, STARTING_COVER);
-      story.badge = clampCover(data.badge, STARTING_COVER);
+      story.crewTrust = clampCover(data.crewTrust);
+      story.badge = clampCover(data.badge);
       story.flags = data.flags && typeof data.flags === 'object' ? data.flags : {};
       story.ending = data.ending || null;
       secondChanceIn = 0;
@@ -105,21 +99,19 @@ export function createCoverMeter(game) {
     if (amount === 0) return;
     const key = which === 'trust' ? 'crewTrust' : 'badge';
     const before = story[key];
-    const after = clampCover(before + amount, before);
+    const after = clampCover(before + amount);
     story[key] = after;
     const delta = after - before;
     if (delta === 0) return;
     game.events.emit('cover:changed', { crewTrust: story.crewTrust, badge: story.badge, delta, which, why: why || '' });
-    const label = which === 'trust' ? 'CREW TRUST' : 'BADGE';
-    const sign = delta > 0 ? '+' : '';
-    game.events.emit('notify', { text: `${label} ${sign}${Math.round(delta)}${why ? `: ${why}` : ''}`, kind: delta > 0 ? 'good' : 'bad' });
-    if (after > 0 || before <= 0) return;
-    if (which === 'trust') crewSmellsACop();
-    else handlerCutsLoose();
+    game.events.emit('notify', { text: coverToastText(which, delta, why), kind: delta > 0 ? 'good' : 'bad' });
+    if (before <= 0) return;
+    if (which === 'trust' && crewSmellsACop(after)) blowTheJob();
+    else if (which === 'badge' && handlerCutsLoose(after)) cutHimLoose();
   }
 
   /** Trust hit zero: the crew made him. The job in hand is blown; Faris talks them round afterwards. */
-  function crewSmellsACop() {
+  function blowTheJob() {
     game.events.emit('cover:blown', { which: 'trust' });
     const missions = game.missions;
     if (missions && missions.active && typeof missions.fail === 'function') missions.fail('The crew made you');
@@ -127,7 +119,7 @@ export function createCoverMeter(game) {
   }
 
   /** The badge hit zero: one warning call from Dahan, then PSPD stops holding back. */
-  function handlerCutsLoose() {
+  function cutHimLoose() {
     if (story.flags.cutLoose) return;
     story.flags.cutLoose = true;
     game.events.emit('cover:cutLoose', {});
@@ -154,10 +146,4 @@ export function createCoverMeter(game) {
   });
 
   return story;
-}
-
-function clampCover(value, fallback) {
-  const v = Number(value);
-  if (!Number.isFinite(v)) return fallback;
-  return v < 0 ? 0 : v > 100 ? 100 : v;
 }
