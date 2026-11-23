@@ -3,13 +3,13 @@
 // turned to their heading where a round through the glass may find the driver, and the city's walls,
 // containers, palms and the ground stop everything (game.colliders.raycast).
 import * as THREE from 'three';
+import { headshotMultiplier } from './combatRules.js';
 
 /** Radius (m) of a standing person, and of the low shape of someone lying down. */
 export const PERSON_RADIUS = 0.35;
 const DOWN_RADIUS = 0.75;
 const DOWN_HEIGHT = 0.45;
-/** Heights above the feet, as shares of a person's height. */
-const HEADSHOT_SHARE = 1.5 / 1.78;
+/** Height of the chest above the feet, as a share of a person's height. */
 const CHEST_SHARE = 1.28 / 1.78;
 /** Chance that a round through a car's windows hits whoever sits at the wheel. */
 const CABIN_HIT_CHANCE = 0.35;
@@ -22,6 +22,7 @@ const CABIN_HIT_CHANCE = 0.35;
  * @property {number} x @property {number} y @property {number} z   the hit point (or the end of the range)
  * @property {number} nx @property {number} ny @property {number} nz  surface normal at the hit
  * @property {boolean} headshot
+ * @property {number} damageScale   what the round's damage is multiplied by (2 for a headshot)
  * @property {boolean} throughGlass  a vehicle's occupant was hit through its windows
  * @property {Object|null} vehicle  the vehicle the round passed into, when it hit an occupant
  */
@@ -44,6 +45,7 @@ export function createBallistics(game, grid) {
     out.target = null;
     out.vehicle = null;
     out.headshot = false;
+    out.damageScale = 1;
     out.throughGlass = false;
     out.distance = range;
     out.nx = -dx;
@@ -87,8 +89,9 @@ export function createBallistics(game, grid) {
           out.target = entity;
           out.vehicle = null;
           out.throughGlass = false;
-          out.headshot = !isDown(entity) && !(entity.intent && entity.intent.crouch)
-            && oy + dy * t - entity.pos.y > heightOf(entity) * HEADSHOT_SHARE;
+          const standing = !isDown(entity) && !(entity.intent && entity.intent.crouch);
+          out.damageScale = standing ? headshotMultiplier(oy + dy * t - entity.pos.y, heightOf(entity)) : 1;
+          out.headshot = out.damageScale > 1;
         }
       }
     }
@@ -110,6 +113,7 @@ export function createBallistics(game, grid) {
     out.target = vehicle;
     out.vehicle = null;
     out.headshot = false;
+    out.damageScale = 1;
     out.throughGlass = false;
     const spec = vehicle.spec;
     const localY = oy + dy * t - vehicle.pos.y;
@@ -146,7 +150,7 @@ export function createBallistics(game, grid) {
 function makeTrace() {
   return {
     kind: null, target: null, distance: 0, x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0,
-    headshot: false, throughGlass: false, vehicle: null,
+    headshot: false, damageScale: 1, throughGlass: false, vehicle: null,
   };
 }
 

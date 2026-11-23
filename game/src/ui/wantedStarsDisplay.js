@@ -3,6 +3,7 @@
 // pursuit is on, blink slowly while the police search, and vanish when the heat is off.
 import { eightPointStarPath } from './hudIconLibrary.js';
 import { createElement, setText, setClass, replayClass } from './uiElements.js';
+import { wantedStarsShown, wantedStarsMode } from './hudAndMenuGuide.js';
 
 /**
  * Build the stars in `container` (#hud-wanted-stars).
@@ -23,15 +24,18 @@ export function createWantedStarsDisplay(game, container) {
     holder.innerHTML = `<svg viewBox="0 0 40 40" aria-hidden="true"><path class="wanted-star-shape" d="${starPath}"/><circle class="wanted-star-eye" cx="20" cy="20" r="4.4"/></svg>`;
     stars.push(holder);
   }
+  const meter = createElement('div', 'wanted-meter', container);
+  const meterFill = createElement('i', 'wanted-meter-fill', meter);
   const display = { update, level: 0 };
   let shownLevel = -1;
   let shownState = '';
+  let shownMeter = -1;
 
   /** Follow game.wanted: level 0..5 and state 'clear' | 'pursuit' | 'search'. */
   function update() {
     const wanted = game.wanted;
-    const level = wanted ? Math.max(0, Math.min(maxStars, Math.round(wanted.level || 0))) : 0;
-    const state = level === 0 ? 'clear' : wanted.state || 'pursuit';
+    const level = wanted ? wantedStarsShown(wanted.level, maxStars) : 0;
+    const state = wantedStarsMode(level, wanted && wanted.state);
     if (level !== shownLevel) {
       for (let i = 0; i < stars.length; i += 1) {
         const on = i < level;
@@ -50,6 +54,15 @@ export function createWantedStarsDisplay(game, container) {
       container.dataset.state = state;
       setText(labelText, state === 'search' ? 'PSPD SEARCHING' : state === 'pursuit' ? 'PSPD PURSUIT' : 'PSPD');
       shownState = state;
+    }
+    // Under the stars: heat building toward the next star in a pursuit, or the search running out.
+    let fraction = 0;
+    if (state === 'search' && typeof wanted.searchProgress === 'number') fraction = 1 - wanted.searchProgress;
+    else if (state === 'pursuit' && typeof wanted.heat === 'number') fraction = level >= maxStars ? 1 : wanted.heat;
+    const step = Math.round(Math.max(0, Math.min(1, fraction)) * 100);
+    if (step !== shownMeter) {
+      shownMeter = step;
+      meterFill.style.width = `${step}%`;
     }
   }
 

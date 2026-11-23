@@ -11,7 +11,7 @@ export const VOICE_BUDGET = 24;
 export const AUDIBLE_RANGE = 180;
 
 /** Base levels of the mix (linear gain). Music sits about 8 dB under the effects. */
-export const MIX_LEVELS = { master: 0.85, effects: 1.0, engine: 0.62, ambience: 0.55, music: 0.4, ui: 0.6 };
+export const MIX_LEVELS = { master: 0.85, effects: 1.0, engine: 0.62, ambience: 0.3, music: 0.37, ui: 0.9 };
 
 /**
  * Create the engine. Nothing makes a sound until unlock() runs inside a user gesture; until then every

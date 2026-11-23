@@ -1,5 +1,6 @@
-// Getting into and out of vehicles: finding the car the player is facing, taking an empty one,
-// pulling a driver out of theirs (a carjacking, which is a crime), and stepping or bailing out.
+// Getting into and out of vehicles: finding the car the player is facing, running to its door,
+// taking an empty one or pulling the driver out of theirs (a carjacking, which is a crime), taking
+// the wheel once seated, and stepping or bailing out.
 
 /** The usable vehicle nearest the character's reach, or null. */
 export function findVehicleToEnter(game, character) {
@@ -9,10 +10,10 @@ export function findVehicleToEnter(game, character) {
   let bestScore = Infinity;
   for (let i = 0; i < vehicles.length; i += 1) {
     const vehicle = vehicles[i];
-    if (vehicle.wrecked) continue;
+    if (vehicle.wrecked || vehicle.sunk || vehicle.hidden) continue;
     const dx = vehicle.pos.x - character.pos.x;
     const dz = vehicle.pos.z - character.pos.z;
-    const reach = vehicle.spec.length * 0.5 + 2.4;
+    const reach = vehicle.spec.length * 0.5 + 2.6;
     const distanceSq = dx * dx + dz * dz;
     if (distanceSq > reach * reach) continue;
     if (Math.abs(vehicle.speed) > 9) continue;
@@ -28,31 +29,47 @@ export function findVehicleToEnter(game, character) {
 }
 
 /**
- * Put the player at the wheel. An occupied car is a carjacking: the driver is thrown out and the
- * theft is reported; a police car is a worse one. options: { instant, quiet }.
+ * Start taking a vehicle: the player runs to the driver's door and climbs in (the character system
+ * plays it, pulling out whoever is at the wheel). An occupied car is a carjacking and is reported; a
+ * police car is a worse one. options: { instant, quiet }. The wheel is taken in takeTheWheel().
  */
 export function enterOrStealVehicle(game, player, vehicle, options) {
   const character = player.character;
   const victim = vehicle.driver && vehicle.driver !== character ? vehicle.driver : null;
-  if (victim) {
-    game.characters.exitVehicle(victim, { thrown: true });
-    if (victim.ai) victim.ai.carjacked = true;
-    game.events.emit('vehicle:carjacked', { vehicle, victim, by: character });
-  }
   const police = vehicle.faction === 'police';
   if (!options.quiet && !vehicle.tags.owned && (victim || police || !vehicle.tags.stolen)) {
     const type = police ? 'policeCarTheft' : victim ? 'carjacking' : 'carTheft';
     game.events.emit('crime', { type, x: vehicle.pos.x, z: vehicle.pos.z, victim, vehicle });
     game.economy?.stats?.add?.('vehiclesStolen', 1);
   }
+  // Whoever was driving loses the car now: it stops where it is and waits for the thief.
+  vehicle.ai = null;
+  const controls = vehicle.controls;
+  controls.throttle = 0;
+  controls.steer = 0;
+  controls.brake = 1;
+  controls.handbrake = true;
+  controls.horn = false;
+  if (victim) {
+    if (victim.ai) victim.ai.carjacked = true;
+    game.events.emit('vehicle:carjacked', { vehicle, victim, by: character });
+  }
   if (!vehicle.tags.owned) vehicle.tags.stolen = true;
+  player.entering = vehicle;
+  player.enteringSince = game.time.elapsed;
   game.characters.enterVehicle(character, vehicle, 0, { instant: !!options.instant });
-  vehicle.driver = character;
+  if (options.instant) takeTheWheel(game, player, vehicle, options);
+}
+
+/** The player is in the seat: the vehicle is theirs to drive. */
+export function takeTheWheel(game, player, vehicle, options = {}) {
+  player.entering = null;
   vehicle.isPlayer = true;
   vehicle.parked = false;
   vehicle.locked = false;
   vehicle.ai = null;
   vehicle.controls.handbrake = false;
+  vehicle.controls.brake = 0;
   player.vehicle = vehicle;
   player.state = 'driving';
   if (game.cameraRig) game.cameraRig.lookBehind = false;

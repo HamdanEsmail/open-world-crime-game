@@ -2,13 +2,7 @@
 // holds where the player is, the clock, and whatever each system hands over through serialize()
 // (money and rank, finished jobs, the cover meter, weapons, owned property, collected falcons).
 
-const STORAGE_PREFIX = 'khamsin-port-sarab-save-';
-const SETTINGS_KEY = 'khamsin-port-sarab-settings';
-const SAVE_SLOTS = ['auto', 'slot1', 'slot2', 'slot3'];
-/** The systems asked for their progress, in the order they are restored. */
-const SAVED_SYSTEMS = ['economy', 'story', 'missions', 'activities', 'safehouses', 'weapons', 'wanted'];
-
-/** Build game.save. */
+/** Build game.save: save(slot), load(slot), listSlots(), hasAny(), the autosave and the stored settings. */
 export function createSaveGame(game) {
   const save = {
     slots: SAVE_SLOTS,
@@ -175,3 +169,9 @@ export function createSaveGame(game) {
   save.loadSettings();
   return save;
 }
+
+const STORAGE_PREFIX = 'khamsin-port-sarab-save-';
+const SETTINGS_KEY = 'khamsin-port-sarab-settings';
+const SAVE_SLOTS = ['auto', 'slot1', 'slot2', 'slot3'];
+/** The systems asked for their progress, in the order they are restored. */
+const SAVED_SYSTEMS = ['economy', 'story', 'missions', 'activities', 'safehouses', 'weapons', 'wanted'];

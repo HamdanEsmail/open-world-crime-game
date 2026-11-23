@@ -3,6 +3,7 @@
 // dunes, a dust wake behind fast cars, grey smoke from a hurt engine, flames and black smoke when it
 // burns and a slow smoulder from a wreck. Running people kick up little puffs of sand on the beach.
 import { MARK_RUBBER, MARK_SAND_RUT } from './skidMarks.js';
+import { tyreSmokeForSlip, skidMarkStrength, sandPlumeForWheel, engineSmokeForDamage } from './effectRules.js';
 
 /**
  * Create the watcher. `emitEffect(kind, x, y, z, options)` spawns a recipe; `skidMarks` lays tracks.
@@ -12,7 +13,7 @@ import { MARK_RUBBER, MARK_SAND_RUT } from './skidMarks.js';
 export function createVehicleWheelEffects(game, emitEffect, skidMarks) {
   const states = new WeakMap();
   const walkers = new WeakMap();
-  const opts = { count: 1, scale: 1, vx: 0, vy: 0, vz: 0, dirX: 0, dirY: 0, dirZ: 0, alpha: 1, color: undefined, grains: undefined };
+  const opts = { count: 1, scale: 1, vx: 0, vy: 0, vz: 0, dirX: 0, dirY: 0, dirZ: 0, alpha: 1, color: undefined, grains: undefined, fireLit: false };
 
   /** Look at every vehicle and every running person near the camera once a frame. */
   function update(dt) {
@@ -69,10 +70,10 @@ export function createVehicleWheelEffects(game, emitEffect, skidMarks) {
       const wz = v.pos.z - lx * sn + lz * cs;
       const wy = groundY(wx, wz, v.pos.y);
       if (paved) {
-        if (skid > SKID_THRESHOLD && speed > 1.5) {
-          const strength = clamp((skid - SKID_THRESHOLD) / 0.45, 0.2, 1);
+        const strength = skidMarkStrength(skid, speed, surface);
+        if (strength > 0) {
           skidMarks.extend(track, wx, wy, wz, tyreWidth, strength, MARK_RUBBER);
-          st.timers[w] += dt * (4 + 18 * strength) * lod * Math.min(1, speed / 6);
+          st.timers[w] += dt * tyreSmokeForSlip(skid, speed) * lod;
           while (st.timers[w] >= 1) {
             st.timers[w] -= 1;
             setOptions(1, 0.8 + 0.5 * strength, vx, vz);
@@ -82,17 +83,17 @@ export function createVehicleWheelEffects(game, emitEffect, skidMarks) {
           skidMarks.endTrack(track);
         }
       } else if (sandy) {
-        if (speed > 1.2) skidMarks.extend(track, wx, wy, wz, tyreWidth * 1.25, 0.5 + 0.5 * Math.min(1, skid + speed / 30), MARK_SAND_RUT);
+        const rut = skidMarkStrength(skid, speed, surface);
+        if (rut > 0) skidMarks.extend(track, wx, wy, wz, tyreWidth * 1.25, rut, MARK_SAND_RUT);
         else skidMarks.endTrack(track);
         const driven = spec.drive === 'awd' || (spec.drive === 'fwd' ? !rear : rear);
-        const rate = (driven ? speed * 0.85 + skid * 26 : speed * 0.2) * lod;
-        st.timers[w] += dt * Math.min(rate, 34);
+        st.timers[w] += dt * sandPlumeForWheel(speed, skid, driven, lod);
         while (st.timers[w] >= 1) {
           st.timers[w] -= 1;
-          const kick = (2 + speed * 0.32 + skid * 5) * direction;
-          setOptions(1, 0.7 + Math.min(0.9, speed / 28 + skid * 0.5), vx, vz);
+          const kick = (2.5 + speed * 0.35 + skid * 6) * direction;
+          setOptions(1, 0.8 + Math.min(1.0, speed / 25 + skid * 0.6), vx, vz);
           opts.dirX = -sn * kick - cs * sideSlide * 0.25;
-          opts.dirY = 1.5 + skid * 4 + speed * 0.1;
+          opts.dirY = 2.5 + skid * 5 + speed * 0.12;
           opts.dirZ = -cs * kick + sn * sideSlide * 0.25;
           emitEffect('sand', wx, wy + 0.2, wz, opts);
         }
@@ -116,17 +117,28 @@ export function createVehicleWheelEffects(game, emitEffect, skidMarks) {
     const bonnetZ = v.pos.z + cs * length * 0.33;
     const bonnetY = v.pos.y + (spec.height || 1.4) * 0.75;
     if (v.onFire) {
-      st.fire += dt * 12 * lod;
+      const width = spec.width || 1.9;
+      const top = v.pos.y + (spec.height || 1.4) * 0.7;
+      st.fire += dt * 18 * lod;
       while (st.fire >= 1) {
         st.fire -= 1;
-        setOptions(1, 0.9, vx, vz);
-        emitEffect('fire', bonnetX, bonnetY, bonnetZ, opts);
+        const along = length * (Math.random() * 0.55 - 0.15);
+        const across = width * (Math.random() - 0.5) * 0.6;
+        setOptions(1, 1.25, vx, vz);
+        emitEffect('fire', v.pos.x + sn * along + cs * across, top, v.pos.z + cs * along - sn * across, opts);
       }
-      st.smoke += dt * 5 * lod;
+      st.smoke += dt * 6 * lod;
       while (st.smoke >= 1) {
         st.smoke -= 1;
-        setOptions(1, 0.9, vx, vz);
-        emitEffect('blackSmoke', bonnetX, bonnetY + 0.6, bonnetZ, opts);
+        setOptions(1, 1.1, vx, vz);
+        opts.fireLit = true;
+        emitEffect('blackSmoke', bonnetX, top + 1.2, bonnetZ, opts);
+      }
+      st.light += dt * 8;
+      while (st.light >= 1) {
+        st.light -= 1;
+        setOptions(1, 0.9 + Math.random() * 0.2, 0, 0);
+        emitEffect('glowPool', v.pos.x + sn * length * 0.15, groundY(v.pos.x, v.pos.z, v.pos.y), v.pos.z + cs * length * 0.15, opts);
       }
     } else if (v.wrecked) {
       if (st.wreckedAt < 0) st.wreckedAt = game.time.elapsed;
@@ -143,9 +155,8 @@ export function createVehicleWheelEffects(game, emitEffect, skidMarks) {
     } else {
       const maxHealth = spec.health || 1000;
       const health = typeof v.health === 'number' ? v.health : maxHealth;
-      const frac = health / maxHealth;
-      if (v.smoking || frac < SMOKE_HEALTH) {
-        const hurt = v.smoking && frac >= SMOKE_HEALTH ? 0.5 : clamp((SMOKE_HEALTH - frac) / SMOKE_HEALTH, 0, 1);
+      const hurt = engineSmokeForDamage(health / maxHealth, !!v.smoking);
+      if (hurt >= 0) {
         st.smoke += dt * (2 + 7 * hurt) * lod;
         while (st.smoke >= 1) {
           st.smoke -= 1;
@@ -224,7 +235,7 @@ export function createVehicleWheelEffects(game, emitEffect, skidMarks) {
       st = {
         tracks: [skidMarks.createTrack(), skidMarks.createTrack(), skidMarks.createTrack(), skidMarks.createTrack()],
         timers: new Float32Array(4),
-        wake: 0, fire: 0, smoke: 0, wreckedAt: -1, lastHit: -10,
+        wake: 0, fire: 0, smoke: 0, light: 0, wreckedAt: -1, lastHit: -10,
       };
       states.set(v, st);
     }
@@ -247,6 +258,7 @@ export function createVehicleWheelEffects(game, emitEffect, skidMarks) {
     opts.alpha = 1;
     opts.color = undefined;
     opts.grains = undefined;
+    opts.fireLit = false;
   }
 
   function surfaceAt(x, z) {
@@ -271,9 +283,7 @@ function clamp(value, min, max) {
 
 const WATCH_RADIUS = 170;
 const NEAR_RADIUS = 70;
-const SKID_THRESHOLD = 0.3;
 const WAKE_SPEED = 18;
-const SMOKE_HEALTH = 0.35;
 const SMOULDER_SECONDS = 50;
 const FOOTSTEP_RADIUS = 35;
 const MAX_WALKERS = 40;

@@ -2,19 +2,7 @@
 // do to the body: ride height over kerbs, dunes and ramps, brake dive, squat and body roll, flight
 // off a ramp lip and the slam of the landing, and a car that floats for a moment before the gulf
 // takes it. Pitch and roll are spring-limited and self-righting: no car ends up on its roof.
-
-/** How high the city's sidewalks stand above the road (a kerb the wheels climb). */
-export const KERB_LIFT = 0.12;
-/** A rise in the ground this sudden under one wheel is a wall, not a slope. */
-const STEP_LIMIT = 0.55;
-/** In the air the nose drops gently toward this pitch (radians, + is nose down). */
-const AIR_NOSE_DOWN = 0.1;
-/** Scale on the pitching moment of braking and accelerating (1 is true to life). */
-const PITCH_TRANSFER = 1.0;
-const PITCH_LIMIT = 0.42;
-const ROLL_LIMIT = 0.26;
-const PITCH_HARD = 0.7;
-const ROLL_HARD = 0.5;
+import { airborneWhenWheelsLeaveGround } from './drivingRules.js';
 
 /**
  * Sample the ground under the four wheels: height (with the kerb on sidewalks) and how fast it is
@@ -40,10 +28,13 @@ export function sampleWheelGround(vehicle, profile, dyn, terrain, cgX, cgZ, sinH
         dyn.groundVel[i] = 0;
         continue;
       }
-      let rate = rise / dt;
-      if (rate > 30) rate = 30;
-      else if (rate < -30) rate = -30;
-      dyn.groundVel[i] = rate;
+      // The tyre swallows sharp edges: the ground's vertical speed under a wheel may only change
+      // so fast, so a kerb edge is a jolt, not a launch. A ramp face rises smoothly and still
+      // throws the car into the air.
+      const rate = rise / dt;
+      const previous = dyn.groundVel[i];
+      const most = GROUND_JERK_LIMIT * dt;
+      dyn.groundVel[i] = rate > previous + most ? previous + most : rate < previous - most ? previous - most : rate;
     } else {
       dyn.groundVel[i] = 0;
     }
@@ -58,6 +49,47 @@ export function sampleWheelGround(vehicle, profile, dyn, terrain, cgX, cgZ, sinH
   dyn.groundPitch = Math.atan2(rear - front, profile.wheelbase);
   dyn.groundRoll = Math.atan2(left - right, profile.track);
   return blocked;
+}
+
+/**
+ * Set a vehicle down at rest on whatever is under its four wheels (a kerb, a dune flank): ride
+ * height, pitch and roll from the wheel contacts, springs at their static length. Used when a
+ * vehicle is spawned or placed, so it never drops or jolts into its first frame.
+ */
+export function restOnGround(vehicle, profile, dyn, terrain) {
+  if (!terrain || !terrain.heightAt) return;
+  const sinH = Math.sin(vehicle.heading);
+  const cosH = Math.cos(vehicle.heading);
+  const cgX = vehicle.pos.x + sinH * profile.cgOffset;
+  const cgZ = vehicle.pos.z + cosH * profile.cgOffset;
+  const kerb = typeof terrain.kerbHeight === 'number' ? terrain.kerbHeight : KERB_LIFT;
+  for (let i = 0; i < 4; i += 1) {
+    const pf = i < 2 ? profile.cgToFront : -profile.cgToRear;
+    const pl = (i & 1) === 0 ? profile.halfTrack : -profile.halfTrack;
+    const wx = cgX + sinH * pf + cosH * pl;
+    const wz = cgZ + cosH * pf - sinH * pl;
+    let ground = terrain.heightAt(wx, wz);
+    if (!(ground > -1000 && ground < 1000)) ground = 0;
+    if (dyn.surface[i] === 'sidewalk') ground += kerb;
+    dyn.groundY[i] = ground;
+    dyn.groundVel[i] = 0;
+    dyn.travel[i] = 0;
+    dyn.travelVel[i] = 0;
+    dyn.load[i] = profile.staticLoad[i];
+    dyn.contact[i] = true;
+  }
+  const g = dyn.groundY;
+  vehicle.pitch = Math.atan2((g[2] + g[3]) * 0.5 - (g[0] + g[1]) * 0.5, profile.wheelbase);
+  vehicle.roll = Math.atan2((g[0] + g[2]) * 0.5 - (g[1] + g[3]) * 0.5, profile.track);
+  // The contact-plane height under the centre of mass, from the front and rear axle heights.
+  const front = (g[0] + g[1]) * 0.5;
+  const rear = (g[2] + g[3]) * 0.5;
+  vehicle.pos.y = rear + (front - rear) * (profile.cgToRear / profile.wheelbase);
+  vehicle.vel.y = 0;
+  dyn.pitchRate = 0;
+  dyn.rollRate = 0;
+  dyn.groundReady = true;
+  vehicle.grounded = true;
 }
 
 /**
@@ -84,7 +116,7 @@ export function computeSuspensionLoads(vehicle, profile, dyn) {
   let touching = 0;
   for (let i = 0; i < 4; i += 1) {
     const x = dyn.travel[i];
-    if (x <= -profile.sag) {
+    if (airborneWhenWheelsLeaveGround(x, profile.sag)) {
       dyn.load[i] = 0;
       dyn.contact[i] = false;
       continue;
@@ -248,3 +280,19 @@ export function writeWheelSuspension(vehicle, profile, dyn) {
     wheels[i].grounded = dyn.contact[i];
   }
 }
+
+/** How high the city's sidewalks stand above the road (a kerb the wheels climb). */
+export const KERB_LIFT = 0.12;
+/** A rise in the ground this sudden under one wheel is a wall, not a slope. */
+const STEP_LIMIT = 0.55;
+/** How fast (m/s^2) the ground's vertical speed under a tyre may change: the tyre's own give. */
+const GROUND_JERK_LIMIT = 160;
+/** In the air the nose drops gently toward this pitch (radians, + is nose down). */
+const AIR_NOSE_DOWN = 0.1;
+/** Scale on the pitching moment of braking and accelerating (1 is true to life). */
+const PITCH_TRANSFER = 1.0;
+/** Body lean beyond which the attitude springs stiffen sharply, and the hard stops (radians). */
+const PITCH_LIMIT = 0.42;
+const ROLL_LIMIT = 0.26;
+const PITCH_HARD = 0.7;
+const ROLL_HARD = 0.5;

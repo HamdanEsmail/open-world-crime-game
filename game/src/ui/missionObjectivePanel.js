@@ -1,9 +1,11 @@
 // The job card, top left: the running job's title in small gold capitals, its current objective
 // large and white on a night-blue plate, a checklist of every step, and a countdown or a tally
-// when the job has one. Between jobs it points the way to the next contact who has work.
+// when the job has one. Races and fares show here too between story jobs, and with neither
+// running it points the way to the next contact who has work.
 import { eightPointStarPath, glyphSvg } from './hudIconLibrary.js';
 import { createElement, setText, setClass, setShown, replayClass, formatTimer, formatDistance, titleFromId } from './uiElements.js';
 import { playerPosition } from './gpsRoute.js';
+import { currentObjectiveIndex } from './hudAndMenuGuide.js';
 
 /**
  * Build the job card in `container` (#hud-mission-objective).
@@ -15,6 +17,9 @@ export function createMissionObjectivePanel(game, container) {
   head.innerHTML = `<svg class="job-star" viewBox="0 0 20 20" aria-hidden="true"><path d="${eightPointStarPath(10, 10, 9.4)}"/></svg>`;
   const kicker = createElement('span', 'job-kicker', head, 'JOB');
   const title = createElement('span', 'job-title', head);
+  const distanceChip = createElement('span', 'job-distance', head);
+  distanceChip.innerHTML = glyphSvg('pin', 'job-distance-glyph');
+  const distanceText = createElement('span', 'job-distance-text', distanceChip);
   const current = createElement('div', 'job-current', card);
   const currentText = createElement('span', 'job-current-text', current);
   const meter = createElement('div', 'job-meter', card);
@@ -38,14 +43,20 @@ export function createMissionObjectivePanel(game, container) {
   let shownCurrent = '';
   let nextHintAt = 0;
 
-  /** Follow game.missions.active; between jobs, refresh the hint twice a second. */
+  /**
+   * Follow the story job (game.missions.active), else the running side activity (a race, a fare:
+   * game.activities.active, same shape); between them, refresh the hint twice a second.
+   */
   function update() {
-    const active = game.missions ? game.missions.active : null;
+    const job = game.missions ? game.missions.active : null;
+    const sideJob = !job && game.activities ? game.activities.active : null;
+    const active = job || sideJob || null;
     if (active !== shownMission) {
       shownMission = active;
       setShown(card, Boolean(active));
+      setClass(card, 'is-side-job', Boolean(sideJob));
       if (active) {
-        setText(kicker, active.kicker || (active.side ? 'SIDE JOB' : 'JOB'));
+        setText(kicker, active.kicker || (sideJob || active.side ? 'SIDE JOB' : 'JOB'));
         setText(title, (active.title || active.name || titleFromId(active.id)).toUpperCase());
         replayClass(card, 'is-entering', 0.7);
       }
@@ -55,6 +66,9 @@ export function createMissionObjectivePanel(game, container) {
       setShown(hint, false);
       updateObjectives(active);
       updateMeter(active);
+      const distance = game.hud && game.hud.route && game.hud.route.length > 1 ? game.hud.routeDistance : 0;
+      setShown(distanceChip, distance > 0);
+      if (distance > 0) setText(distanceText, formatDistance(distance));
     } else {
       updateHint();
     }
@@ -71,14 +85,7 @@ export function createMissionObjectivePanel(game, container) {
       shownTexts.push(null);
       shownDone.push(null);
     }
-    let currentIndex = -1;
-    for (let i = 0; i < objectives.length; i += 1) {
-      if (!objectives[i].done && !objectives[i].optional) {
-        currentIndex = i;
-        break;
-      }
-    }
-    if (currentIndex === -1) for (let i = 0; i < objectives.length; i += 1) if (!objectives[i].done) { currentIndex = i; break; }
+    const currentIndex = currentObjectiveIndex(objectives);
     for (let i = 0; i < stepNodes.length; i += 1) {
       const node = stepNodes[i];
       const objective = objectives[i];

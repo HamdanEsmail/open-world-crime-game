@@ -1,21 +1,7 @@
 // What a beating does to a vehicle in Port Sarab: dents that sap the engine, grey smoke once it is
 // down to a third of its health, then fire, a few seconds' fuse and an explosion that throws nearby
 // cars and people, leaving a charred wreck on the street. A car driven into the gulf floods and dies.
-
-/** Below this share of its health the engine coughs and the bonnet smokes. */
-export const SMOKING_SHARE = 0.35;
-export const EXPLOSION_RADIUS = 7;
-/** Impulse (N s) and damage a vehicle takes at the heart of a blast; both fall off to the edge. */
-const BLAST_IMPULSE = 12000;
-const BLAST_VEHICLE_DAMAGE = 950;
-const BLAST_PERSON_DAMAGE = 170;
-/** Seconds a wreck burns before it blows (a blast-wrecked car goes much sooner: a chain reaction). */
-const FUSE_MIN = 4;
-const FUSE_MAX = 6;
-const CHAIN_FUSE_MIN = 0.6;
-const CHAIN_FUSE_MAX = 1.6;
-/** Seconds the charred wreck keeps burning after the explosion. */
-const AFTERBURN = 10;
+import { enginePowerAtHealth, SMOKING_SHARE } from './drivingRules.js';
 
 /**
  * Build the damage model shared by every vehicle.
@@ -61,7 +47,7 @@ export function createVehicleDamage(game, vehicles) {
     }
     const share = vehicle.health / vehicle.maxHealth;
     vehicle.smoking = share < SMOKING_SHARE;
-    dyn.enginePower = share >= SMOKING_SHARE ? 1 : 0.45 + 0.55 * (share / SMOKING_SHARE);
+    dyn.enginePower = enginePowerAtHealth(share);
   }
 
   /** Health gone: the engine dies, the car burns, and the fuse starts. */
@@ -229,3 +215,16 @@ export function createVehicleDamage(game, vehicles) {
 function range(min, max) {
   return min + Math.random() * (max - min);
 }
+
+export const EXPLOSION_RADIUS = 7;
+/** Impulse (N s) and damage a vehicle takes at the heart of a blast; both fall off to the edge. */
+const BLAST_IMPULSE = 12000;
+const BLAST_VEHICLE_DAMAGE = 950;
+const BLAST_PERSON_DAMAGE = 170;
+/** Seconds a wreck burns before it blows (a blast-wrecked car goes much sooner: a chain reaction). */
+const FUSE_MIN = 4;
+const FUSE_MAX = 6;
+const CHAIN_FUSE_MIN = 0.6;
+const CHAIN_FUSE_MAX = 1.6;
+/** Seconds the charred wreck keeps burning after the explosion. */
+const AFTERBURN = 10;

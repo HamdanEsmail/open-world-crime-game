@@ -213,7 +213,7 @@ function paintMarkMask() {
   for (let x = 4; x < 124; x += 1) {
     const t = (x - 4) / 120;
     const edge = Math.min(1, t * 6, (1 - t) * 6);
-    const groove = Math.sin(t * Math.PI * 9) > 0.55 ? 0.6 : 1;
+    const groove = Math.sin(t * Math.PI * 9) > 0.6 ? 0.78 : 1;
     const v = Math.round(255 * edge * groove * 0.95);
     ctx.fillStyle = `rgb(${v},${v},${v})`;
     ctx.fillRect(x, 0, 1, 128);
@@ -251,13 +251,17 @@ function paintMarkMask() {
   core.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = core;
   ctx.fillRect(128, 0, 128, 128);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(128, 0, 128, 128);
+  ctx.clip();
   ctx.globalCompositeOperation = 'destination-in';
   const rim = ctx.createRadialGradient(cx, cy, 40, cx, cy, 62);
   rim.addColorStop(0, 'rgba(0,0,0,1)');
   rim.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = rim;
   ctx.fillRect(128, 0, 128, 128);
-  ctx.globalCompositeOperation = 'source-over';
+  ctx.restore();
   ctx.fillStyle = '#000';
   ctx.fillRect(126, 0, 4, 128);
   const texture = new THREE.CanvasTexture(canvas);

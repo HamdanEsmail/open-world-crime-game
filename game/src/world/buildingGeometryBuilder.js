@@ -64,6 +64,51 @@ export function ellipsePoints(cx, cz, rx, rz, segments = 16, rotation = 0) {
   return points;
 }
 
+/**
+ * One side of a rectangular footprint as seen from the street: its left end a, right end b,
+ * the unit direction t from a to b and the outward normal n. `side` is 'n', 's', 'e' or 'w'.
+ */
+export function faceOf(cx, cz, w, d, side) {
+  const x0 = cx - w / 2;
+  const x1 = cx + w / 2;
+  const z0 = cz - d / 2;
+  const z1 = cz + d / 2;
+  if (side === 's') return { ax: x0, az: z1, bx: x1, bz: z1, tx: 1, tz: 0, nx: 0, nz: 1, length: w };
+  if (side === 'n') return { ax: x1, az: z0, bx: x0, bz: z0, tx: -1, tz: 0, nx: 0, nz: -1, length: w };
+  if (side === 'e') return { ax: x1, az: z1, bx: x1, bz: z0, tx: 0, tz: -1, nx: 1, nz: 0, length: d };
+  return { ax: x0, az: z0, bx: x0, bz: z1, tx: 0, tz: 1, nx: -1, nz: 0, length: d };
+}
+
+/** Shrink a convex footprint by moving every side `inset` metres inward. */
+export function insetPoints(points, inset) {
+  const n = points.length;
+  const lines = [];
+  for (let i = 0; i < n; i += 1) {
+    const a = points[i];
+    const b = points[(i + 1) % n];
+    const dx = b[0] - a[0];
+    const dz = b[1] - a[1];
+    const len = Math.hypot(dx, dz) || 1;
+    // the outward normal is (-dz, dx); move the side against it
+    const nx = -dz / len;
+    const nz = dx / len;
+    lines.push({ px: a[0] - nx * inset, pz: a[1] - nz * inset, dx: dx / len, dz: dz / len });
+  }
+  const result = [];
+  for (let i = 0; i < n; i += 1) {
+    const l1 = lines[(i + n - 1) % n];
+    const l2 = lines[i];
+    const cross = l1.dx * l2.dz - l1.dz * l2.dx;
+    if (Math.abs(cross) < 1e-6) {
+      result.push([l2.px, l2.pz]);
+      continue;
+    }
+    const t = ((l2.px - l1.px) * l2.dz - (l2.pz - l1.pz) * l2.dx) / cross;
+    result.push([l1.px + l1.dx * t, l1.pz + l1.dz * t]);
+  }
+  return result;
+}
+
 /** Scale a footprint about (cx, cz). */
 export function scalePoints(points, cx, cz, sx, sz = sx) {
   return points.map(([x, z]) => [cx + (x - cx) * sx, cz + (z - cz) * sz]);

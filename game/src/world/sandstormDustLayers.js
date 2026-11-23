@@ -2,7 +2,7 @@
 // past the camera with the wind, and the towering wall of dust that rolls in from the dunes before
 // the storm swallows the city. Both are single draw calls whose motion is computed on the GPU.
 import * as THREE from 'three';
-import { SKY_NOISE_GLSL } from './skyDome.js';
+import { getSkyNoiseTexture } from './skyNoiseTexture.js';
 
 /**
  * Create the khamsin's two dust layers and add them to the scene (hidden while the air is clear).
@@ -11,7 +11,7 @@ import { SKY_NOISE_GLSL } from './skyDome.js';
 export function createSandstormDustLayers(game) {
   const rng = game.rng.fork('khamsin-dust');
   const streaks = createBlowingSandStreaks(rng, STREAK_COUNT);
-  const front = createDustFrontWall();
+  const front = createDustFrontWall(getSkyNoiseTexture(game));
   game.scene.add(streaks, front);
 
   const drift = streaks.material.uniforms.uDrift.value;
@@ -149,7 +149,7 @@ function createBlowingSandStreaks(rng, count) {
  * The advancing wall of dust: an open half-ring around the camera on the upwind side, its ragged
  * crest boiling slowly, sunlit along the top and dark and dense at its foot.
  */
-function createDustFrontWall() {
+function createDustFrontWall(noiseMap) {
   const segments = 96;
   const positions = [];
   const indices = [];
@@ -175,6 +175,7 @@ function createDustFrontWall() {
       uBase: { value: -30 },
       uUpwind: { value: new THREE.Vector2(0, 1) },
       uTime: { value: 0 },
+      uNoiseMap: { value: noiseMap },
       uAlpha: { value: 0 },
       uDustLit: { value: new THREE.Color(0.9, 0.6, 0.3) },
       uDustShade: { value: new THREE.Color(0.45, 0.28, 0.16) },
@@ -193,7 +194,8 @@ function createDustFrontWall() {
   const mesh = new THREE.Mesh(geometry, material);
   mesh.name = 'khamsinDustFront';
   mesh.frustumCulled = false;
-  mesh.renderOrder = 4;
+  // Far away: drawn right after the sea and before nearer see-through things such as smoke.
+  mesh.renderOrder = -5;
   mesh.visible = false;
   return mesh;
 }
@@ -285,6 +287,7 @@ void main() {
 
 const FRONT_FRAGMENT = /* glsl */ `
 uniform float uTime;
+uniform sampler2D uNoiseMap;
 uniform float uAlpha;
 uniform vec3 uDustLit;
 uniform vec3 uDustShade;
@@ -296,14 +299,14 @@ varying vec3 vWorld;
 varying float vArc;
 varying float vRise;
 varying float vViewDepth;
-${SKY_NOISE_GLSL}
 void main() {
   float u = vArc / 150.0;
   // The crest: broad surges with rounded, boiling heads on top of them.
-  float surge = sarabFbm(vec2(u * 0.7 + uTime * 0.018, uTime * 0.012));
-  float heads = sarabNoise(vec2(u * 3.2 - uTime * 0.05, uTime * 0.03));
-  float crest = 0.38 + 0.4 * surge + 0.12 * heads * heads;
-  float billows = sarabFbm(vec2(u * 2.6 - uTime * 0.035, vRise * 6.0 - uTime * 0.07));
+  float surge = texture2D(uNoiseMap, vec2(u * 0.7 + uTime * 0.018, uTime * 0.012) * 0.125).r;
+  float heads = texture2D(uNoiseMap, vec2(u * 1.9 - uTime * 0.05, uTime * 0.03) * 0.03125).a;
+  heads = sqrt(max(1.0 - (1.0 - heads) * (1.0 - heads) * 1.6, 0.0));
+  float crest = 0.3 + 0.55 * surge + 0.07 * heads;
+  float billows = texture2D(uNoiseMap, vec2(u * 2.6 - uTime * 0.035, vRise * 6.0 - uTime * 0.07) * 0.125).r;
   float edge = vRise + (billows - 0.5) * 0.1;
   float density = smoothstep(crest + 0.004, crest - 0.035, edge);
   // Darker and denser at the foot, sunlit cauliflower heads along the top.

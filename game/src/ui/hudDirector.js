@@ -87,6 +87,7 @@ export function createHud(game) {
   };
   let dimmed = false;
   let inVehicleShown = null;
+  let minimapDt = 0;
 
   /** Update every piece; each writes to the page only what changed. */
   function update(dt) {
@@ -106,7 +107,13 @@ export function createHud(game) {
     }
     try {
       gps.update();
-      minimap.update(dt);
+      // When the frame rate sags (a slow GPU), the minimap turns at half rate to give the city room.
+      const struggling = game.time.fps > 0 && game.time.fps < 50;
+      minimapDt += dt;
+      if (!struggling || (game.time.frame & 1) === 0) {
+        minimap.update(minimapDt);
+        minimapDt = 0;
+      }
       vitals.update();
       wanted.update();
       money.update(dt);

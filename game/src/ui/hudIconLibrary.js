@@ -48,8 +48,9 @@ export function weaponIconSvg(weaponClass) {
 
 /** Work out a weapon's class from its catalogue entry or, failing that, from words in its id. */
 export function weaponClassOf(spec, id) {
-  const declared = spec && (spec.className || spec.class || spec.kind || spec.category || spec.type);
+  const declared = spec && (spec.model || spec.className || spec.class || spec.kind || spec.category || spec.type);
   if (declared && WEAPON_SHAPES[declared]) return declared;
+  if (declared === 'bat' || declared === 'knife' || declared === 'blade') return 'melee';
   const text = `${declared || ''} ${id || ''} ${spec?.name || ''}`.toLowerCase();
   if (!id || text.includes('fist') || text.includes('unarmed')) return 'fists';
   if (text.includes('snip') || text.includes('marksman')) return 'sniper';

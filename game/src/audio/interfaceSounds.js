@@ -185,13 +185,13 @@ function cash(ctx, out, t) {
 
 /** Magazine out, magazine in, slide racked. */
 function reload(ctx, out, t) {
-  playNoise(ctx, out, t, { filter: 'bandpass', freq: 2600, q: 4, attack: 0.0005, decay: 0.016, gain: 0.25 });
-  playNoise(ctx, out, t + 0.08, { filter: 'bandpass', freq: 1500, q: 1.5, attack: 0.03, decay: 0.05, gain: 0.08 });
-  playNoise(ctx, out, t + 0.36, { filter: 'bandpass', freq: 1800, q: 2, attack: 0.0006, decay: 0.022, gain: 0.3 });
-  playTone(ctx, out, t + 0.36, { freq: 420, freqEnd: 200, attack: 0.001, decay: 0.035, gain: 0.12 });
-  playNoise(ctx, out, t + 0.54, { filter: 'bandpass', freq: 1200, q: 1.2, attack: 0.02, decay: 0.05, gain: 0.08 });
-  playNoise(ctx, out, t + 0.6, { filter: 'bandpass', freq: 3200, q: 4, attack: 0.0005, decay: 0.014, gain: 0.26 });
-  return playNoise(ctx, out, t + 0.67, { filter: 'bandpass', freq: 2700, q: 4, attack: 0.0005, decay: 0.02, gain: 0.3 });
+  playNoise(ctx, out, t, { filter: 'bandpass', freq: 2600, q: 4, attack: 0.0005, decay: 0.018, gain: 0.45 });
+  playNoise(ctx, out, t + 0.08, { filter: 'bandpass', freq: 1500, q: 1.5, attack: 0.03, decay: 0.05, gain: 0.14 });
+  playNoise(ctx, out, t + 0.36, { filter: 'bandpass', freq: 1800, q: 2, attack: 0.0006, decay: 0.024, gain: 0.5 });
+  playTone(ctx, out, t + 0.36, { freq: 420, freqEnd: 200, attack: 0.001, decay: 0.035, gain: 0.2 });
+  playNoise(ctx, out, t + 0.54, { filter: 'bandpass', freq: 1200, q: 1.2, attack: 0.02, decay: 0.05, gain: 0.14 });
+  playNoise(ctx, out, t + 0.6, { filter: 'bandpass', freq: 3200, q: 4, attack: 0.0005, decay: 0.016, gain: 0.45 });
+  return playNoise(ctx, out, t + 0.67, { filter: 'bandpass', freq: 2700, q: 4, attack: 0.0005, decay: 0.022, gain: 0.5 });
 }
 
 function emptyClick(ctx, out, t) {

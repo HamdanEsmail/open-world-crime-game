@@ -1,6 +1,6 @@
 // The arsenal of Port Sarab: a cedar bat and five guns with invented names, what each one does, what
-// it costs at Brass & Barrel and the reputation rank that puts it on the shelf. Every number the
-// shooting, the melee, the shops and the gunfight AI use is in this file.
+// it costs at Brass & Barrel and the reputation rank that puts it on the shelf. The figures of every
+// weapon live here; the rules that use them (falloff, spread, assist) live in combatRules.js.
 
 /**
  * @typedef {Object} WeaponSpec
@@ -104,29 +104,3 @@ export function weaponSpecById(id) {
   if (id === 'fists') return FISTS;
   return BY_ID.get(id) || null;
 }
-
-/**
- * Damage a single bullet (or pellet) of `spec` still carries after `distance` metres: full up to
- * falloffStart, then down in a straight line to falloffEnd of it at the weapon's range.
- */
-export function damageAtDistance(spec, distance) {
-  if (distance <= spec.falloffStart || spec.range <= spec.falloffStart) return spec.damage;
-  const t = Math.min(1, (distance - spec.falloffStart) / (spec.range - spec.falloffStart));
-  return spec.damage * (1 - t * (1 - spec.falloffEnd));
-}
-
-/** How far apart an AI likes to stand from its target with this weapon, in metres: [nearest, farthest]. */
-export function preferredFightingDistance(spec) {
-  if (!spec) return FIGHTING_DISTANCE.fists;
-  return FIGHTING_DISTANCE[spec.id] || FIGHTING_DISTANCE.pistol;
-}
-
-const FIGHTING_DISTANCE = {
-  fists: [0, 1.0],
-  bat: [0, 1.5],
-  pistol: [7, 20],
-  smg: [5, 15],
-  shotgun: [2.5, 8],
-  rifle: [12, 32],
-  marksman: [26, 60],
-};

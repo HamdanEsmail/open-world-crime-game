@@ -42,12 +42,13 @@ export function createNotificationFeed(game, containers) {
     while (toasts.length > 4) toasts.pop().node.remove();
   }
 
-  /** A line of dialogue at the bottom centre. */
-  function showSubtitle(speaker, text, seconds) {
+  /** A line of dialogue at the bottom centre; `color` tints the speaker's name (each of the cast has one). */
+  function showSubtitle(speaker, text, seconds, color) {
     if (!text) {
       hideAt.subtitle = 0;
       return;
     }
+    subtitleSpeaker.style.color = typeof color === 'string' ? color : '';
     setText(subtitleSpeaker, speaker ? String(speaker).toUpperCase() : '');
     setShown(subtitleSpeaker, Boolean(speaker));
     setText(subtitleText, text);
@@ -122,7 +123,7 @@ export function createNotificationFeed(game, containers) {
   }
 
   game.events.on('notify', (payload) => notify(payload && payload.text, payload && payload.kind, payload && payload.seconds));
-  game.events.on('subtitle', (payload) => payload && showSubtitle(payload.speaker, payload.text, payload.seconds));
+  game.events.on('subtitle', (payload) => payload && showSubtitle(payload.speaker, payload.text, payload.seconds, payload.color));
   game.events.on('radio:changed', (payload) => showRadio(payload && payload.station));
   game.events.on('player:enteredVehicle', (payload) => {
     if (payload && payload.vehicle) showVehicle(payload.vehicle);

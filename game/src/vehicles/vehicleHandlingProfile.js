@@ -1,15 +1,8 @@
 // Turns a vehicle from the catalogue into the numbers its handling runs on: where the weight sits,
 // how it resists turning, the tyre curves, springs, dampers and anti-roll bars, the steering lock,
-// the engine, gears and brakes. A twitchy rear-drive coupe, a planted all-wheel-drive super car, a
+// the engine, gears and brakes. A lively rear-drive coupe, a planted all-wheel-drive super car, a
 // soft long-travel dune buggy and a ponderous city bus all come out of these few figures.
-
-export const GRAVITY = 9.81;
-
-/** Tyre curve shape (Pacejka C): grip rises steeply, peaks, then falls to about 76% in a full slide. */
-export const TYRE_SHAPE = 1.45;
-const TYRE_PEAK_INPUT = Math.tan(Math.PI / (2 * TYRE_SHAPE));
-
-const profileCache = new Map();
+import { TYRE_SHAPE } from './drivingRules.js';
 
 /**
  * The handling profile of a catalogue spec, built once and shared by every vehicle of that model.
@@ -134,8 +127,6 @@ export function buildHandlingProfile(spec) {
     tyreStiffnessFront: tyreStiffness,
     tyreStiffnessRear: tyreStiffness,
     loadSensitivity: 0.12,
-    sandGrip: 0.7 + 0.28 * offroad,
-    sandDrag: 1 - offroad,
 
     driveFront: drive === 'fwd' ? 1 : drive === 'awd' ? 0.42 : 0,
     driveRear: drive === 'fwd' ? 0 : drive === 'awd' ? 0.58 : 1,
@@ -176,3 +167,8 @@ function clamp(value, min, max) {
 function clamp01(value) {
   return value < 0 ? 0 : value > 1 ? 1 : value;
 }
+
+export const GRAVITY = 9.81;
+/** Where the tyre curve of the driving rules peaks (the atan input at the top of the sine). */
+const TYRE_PEAK_INPUT = Math.tan(Math.PI / (2 * TYRE_SHAPE));
+const profileCache = new Map();

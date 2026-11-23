@@ -5,6 +5,15 @@
 
 const kitsByContext = new WeakMap();
 const driveCurves = new Map();
+let pitchScale = 1;
+
+/**
+ * Scale the pitch of every tone and filter the building blocks make until it is set back to 1; a
+ * sound played with {pitch: 1.2} is rendered inside such a scope.
+ */
+export function setPitchScale(scale) {
+  pitchScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
 
 /**
  * The shared sound material of one audio context (live or offline), made on first use.
@@ -44,8 +53,8 @@ export function playTone(ctx, destination, when, o) {
   const osc = ctx.createOscillator();
   if (o.wave) osc.setPeriodicWave(o.wave);
   else osc.type = o.type || 'sine';
-  osc.frequency.setValueAtTime(o.freq, when);
-  if (o.freqEnd) osc.frequency.exponentialRampToValueAtTime(Math.max(1, o.freqEnd), when + (o.sweep ?? total));
+  osc.frequency.setValueAtTime(o.freq * pitchScale, when);
+  if (o.freqEnd) osc.frequency.exponentialRampToValueAtTime(Math.max(1, o.freqEnd * pitchScale), when + (o.sweep ?? total));
   if (o.detune) osc.detune.setValueAtTime(o.detune, when);
   const amp = ctx.createGain();
   shapeEnvelope(amp.gain, when, o.gain ?? 0.5, attack, hold, decay);
@@ -104,8 +113,8 @@ export function shapeEnvelope(param, when, peak, attack, hold, decay) {
 export function makeSweptFilter(ctx, when, f, seconds) {
   const filter = ctx.createBiquadFilter();
   filter.type = f.type || 'lowpass';
-  filter.frequency.setValueAtTime(f.freq, when);
-  if (f.freqEnd) filter.frequency.exponentialRampToValueAtTime(Math.max(20, f.freqEnd), when + (f.sweep ?? seconds));
+  filter.frequency.setValueAtTime(Math.min(20000, f.freq * pitchScale), when);
+  if (f.freqEnd) filter.frequency.exponentialRampToValueAtTime(Math.min(20000, Math.max(20, f.freqEnd * pitchScale)), when + (f.sweep ?? seconds));
   if (f.q !== undefined) filter.Q.setValueAtTime(f.q, when);
   return filter;
 }

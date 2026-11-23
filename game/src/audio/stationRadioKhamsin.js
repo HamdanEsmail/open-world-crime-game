@@ -3,19 +3,16 @@
 // Hijaz-style scale with grace notes, tremolo and runs that fall home to the tonic; a breathy reed flute
 // takes the quiet middle. Every pattern and phrase is generated here, fresh for each song.
 import {
-  SCALES, scaleNote, makeMotif, varyMotif, buildForm, sectionAt, setTempo, nameSong, snapToChord,
+  SCALES, scaleNote, makeMotif, varyMotif, buildForm, sectionAt, setTempo, nameSong, snapToChord, fitRegister,
 } from './musicSequencer.js';
+import { RADIO_STATION_GUIDE } from './radioAndSoundGuide.js';
 
-/** The station and its composer. */
+/** The station (its name, host and tagline come from the guide) and its composer. */
 export const RADIO_KHAMSIN = {
-  id: 'radio_khamsin',
-  name: 'Radio Khamsin 94.3',
-  frequency: '94.3 FM',
-  host: 'Auntie Hala Mansour',
-  tagline: 'Drums of the old quarter, straight to your dashboard.',
+  ...RADIO_STATION_GUIDE.find((s) => s.id === 'radio_khamsin'),
   color: '#1ba39c',
   kind: 'music',
-  mix: { level: 1.0, drums: 0.95, bass: 0.7, keys: 0.6, lead: 0.75, fx: 0.4, reverb: 0.26, delay: 0.14, delaySteps: 3, tone: 14000 },
+  mix: { level: 0.27, drums: 0.95, bass: 0.7, keys: 0.6, lead: 0.75, fx: 0.4, reverb: 0.26, delay: 0.14, delaySteps: 3, tone: 14000 },
   makeSong,
   composeBar,
 };
@@ -108,7 +105,7 @@ function composeBar(song, bar, rng) {
 
   // Bass: round plucks under the doums, moving between the tonic and its neighbours.
   if (drums) {
-    const bassRoot = scaleNote(song.root, song.scale, bassDegree);
+    const bassRoot = fitRegister(scaleNote(song.root, song.scale, bassDegree), 36, 47);
     for (let st = 0; st < 16; st += 1) {
       if (skeleton[st] !== 'D') continue;
       const midi = st === 0 ? bassRoot : rng.chance(0.3) ? bassRoot + 7 : bassRoot;

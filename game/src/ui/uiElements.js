@@ -1,6 +1,9 @@
 // Small DOM and number helpers shared by every HUD piece and screen of KHAMSIN: build elements,
 // write text only when it changes (so the HUD never thrashes layout), and format money, time,
 // distance and key names the way Port Sarab prints them.
+import { formatMoney, formatClock } from './hudAndMenuGuide.js';
+
+export { formatMoney, formatClock };
 
 /**
  * Create an element with a class and optional text, appended to `parent` when given.
@@ -88,25 +91,10 @@ export function applySandGrainTexture() {
   }
 }
 
-/** '$12,450' (and '-$300' for losses). */
-export function formatMoney(amount) {
-  const value = Math.round(Number(amount) || 0);
-  const digits = Math.abs(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return `${value < 0 ? '-' : ''}$${digits}`;
-}
-
 /** '+$500' or '-$300'. */
 export function formatMoneyDelta(delta) {
   const value = Math.round(Number(delta) || 0);
   return `${value >= 0 ? '+' : '-'}${formatMoney(Math.abs(value))}`;
-}
-
-/** The in-game 24 h clock from a fractional hour: 17.4 -> '17:24'. */
-export function formatClock(hour) {
-  const h = ((Number(hour) || 0) % 24 + 24) % 24;
-  const whole = Math.floor(h);
-  const minutes = Math.floor((h - whole) * 60);
-  return `${whole < 10 ? '0' : ''}${whole}:${minutes < 10 ? '0' : ''}${minutes}`;
 }
 
 /** A countdown: 102.4 -> '01:42'. */

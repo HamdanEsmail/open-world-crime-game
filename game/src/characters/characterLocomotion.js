@@ -4,6 +4,7 @@
 // arms counter-swing, the torso leans into speed and banks into turns, and standing people breathe,
 // shift their weight and look around. Also jumps, falls, landings, crouching, strafing and backpedalling.
 import { POSE, SIDE_SIGN, ARM_BASE, LEG_BASE, FOOT_IK_BASE, HAND_IK_BASE } from './characterRig.js';
+import { strideLengthAtSpeed, gaitLevelAtSpeed, leanIntoTurn } from './characterAnimationRules.js';
 
 /** Per-person gait memory (phase, smoothed speed and lean, idle timers). */
 export function createGaitState(seed = Math.random()) {
@@ -46,14 +47,14 @@ export function poseLocomotion(out, g, rig, m, dt) {
   const dirZ = g.dirZ / dirLength;
   const facingForward = Math.max(0, dirZ);
 
-  const level = speedLevel(speed, m.walkSpeed, m.runSpeed, m.sprintSpeed);
+  const level = gaitLevelAtSpeed(speed, m.walkSpeed, m.runSpeed, m.sprintSpeed);
   g.level = damp(g.level, level, level > g.level ? 7 : 4, dt);
   const L = g.level;
   g.crouch = damp(g.crouch, m.crouch ? 1 : 0, 8, dt);
   g.exertion = clamp(g.exertion + (L > 2.2 ? 0.12 : L > 1.6 ? 0.03 : -0.06) * dt, 0, 1);
 
   // Stride: cycle length grows with speed; planted feet sweep exactly the distance travelled.
-  const cycle = cycleLength(speed) * h * (1 - 0.3 * g.crouch);
+  const cycle = strideLengthAtSpeed(speed) * h * (1 - 0.3 * g.crouch);
   const turning = Math.abs(m.yawRate);
   const shuffle = speed < 0.35 && turning > 0.7 && m.grounded;
   const moving = speed > 0.12 || shuffle;
@@ -155,7 +156,7 @@ export function poseLocomotion(out, g, rig, m, dt) {
   out[POSE.ROOT_Y] = rootY;
   out[POSE.ROOT_Z] = 0;
   out[POSE.ROOT_YAW] = -pelvisYaw * Math.cos(swingPhase) * facingForward + 0.3 * Math.atan2(dirX, Math.abs(dirZ) + 0.2) * g.stride;
-  g.bank = damp(g.bank, clamp(m.yawRate * speed * 0.045, -0.32, 0.32), 6, dt);
+  g.bank = damp(g.bank, leanIntoTurn(m.yawRate, speed), 6, dt);
   out[POSE.ROOT_ROLL] = -hipDrop * Math.sin(swingPhase) - shift * 0.05 + g.bank;
   const leanAccel = clamp(g.accel * 0.03, -0.22, 0.26);
   out[POSE.ROOT_PITCH] = table(ROOT_LEAN, L) + leanAccel * 0.6 + 0.32 * g.crouch;
@@ -238,10 +239,12 @@ function updateAir(out, g, rig, m, dt) {
     out[leg + 3] += (knee - out[leg + 3]) * w;
     out[leg + 4] += (0.35 - out[leg + 4]) * w;
     const a = ARM_BASE[side];
-    const swing = rising ? 0.55 - 0.25 * lead : 0.35 + 0.6 * Math.sin(g.airTime * 9 + side * Math.PI) * falling;
+    const windmill = Math.sin(g.airTime * 8.5 + side * Math.PI);
+    const swing = rising ? 0.55 - 0.25 * lead : 0.3 + 0.9 * windmill * falling;
     out[a] += (swing - out[a]) * w;
-    out[a + 1] += (0.55 + 0.6 * falling - out[a + 1]) * w;
-    out[a + 3] += (0.7 - 0.3 * falling - out[a + 3]) * w;
+    out[a + 1] += (0.45 + 0.85 * falling + 0.2 * Math.cos(g.airTime * 8.5 + side) * falling - out[a + 1]) * w;
+    out[a + 2] += (-0.6 * falling - out[a + 2]) * w;
+    out[a + 3] += (0.7 + 0.35 * falling - out[a + 3]) * w;
   }
   out[POSE.ROOT_Y] += (-0.05 * rig.height - out[POSE.ROOT_Y]) * w;
   out[POSE.SPINE_PITCH] += ((rising ? 0.12 : -0.05) - out[POSE.SPINE_PITCH]) * w;
@@ -265,21 +268,6 @@ function updateIdleLife(g, dt) {
   }
   g.lookYaw = damp(g.lookYaw, g.lookTargetYaw, 4.5, dt);
   g.lookPitch = damp(g.lookPitch, g.lookTargetPitch, 3, dt);
-}
-
-/** 0 standing, 1 walking, 2 running, 3 sprinting (continuous). */
-function speedLevel(speed, walk, run, sprint) {
-  if (speed <= 0.1) return 0;
-  if (speed <= walk) return (speed - 0.1) / (walk - 0.1);
-  if (speed <= run) return 1 + (speed - walk) / (run - walk);
-  return Math.min(3, 2 + (speed - run) / (sprint - run));
-}
-
-/** Metres travelled in one full stride (two steps) at this speed. */
-function cycleLength(speed) {
-  if (speed < 2.0) return 0.72 + 0.37 * speed;
-  if (speed < 4.6) return 1.46 + (speed - 2.0) * 0.6;
-  return 3.02 + (speed - 4.6) * 0.4;
 }
 
 /** 0..1 through the flight between two running steps. */
@@ -332,8 +320,8 @@ const FOOT_SPREAD =     [0.028,  0.004,  -0.014, -0.02];
 const HIP_BASE =        [-0.008, -0.022, -0.06,  -0.085];
 const COMPRESS =        [0.0,    0.0,    0.045,  0.055];
 const FLIGHT_LIFT =     [0.0,    0.0,    0.035,  0.05];
-const ROOT_LEAN =       [0.0,    0.03,   0.1,    0.19];
-const SPINE_LEAN =      [0.0,    0.03,   0.08,   0.12];
+const ROOT_LEAN =       [0.0,    0.06,   0.15,   0.25];
+const SPINE_LEAN =      [0.02,   0.06,   0.12,   0.17];
 const PELVIS_YAW =      [0.0,    0.1,    0.13,   0.16];
 const CHEST_YAW =       [0.0,    0.08,   0.14,   0.18];
 const HIP_DROP =        [0.0,    0.06,   0.04,   0.03];

@@ -78,7 +78,7 @@ export function createFacadeAtlas(game) {
     texture.needsUpdate = true;
   }
 
-  return { colorTexture, glowTexture, tiles, tileList, tileRects, tileInfo, canvas: { color, mask, glow } };
+  return { colorTexture, glowTexture, tiles, tileList, tileRects, tileInfo, size: ATLAS_SIZE, canvas: { color, mask, glow } };
 }
 
 /**
@@ -134,7 +134,7 @@ const FACADE_TILES = [
   // Plain materials in quarter cells
   { name: 'plain', cell: [4, 4, 0], worldW: 4, worldH: 4, paint: paint.plain },
   { name: 'roofGravel', cell: [4, 4, 1], worldW: 8, worldH: 8, paint: paint.roofGravel },
-  { name: 'stone', cell: [4, 4, 2], worldW: 3, worldH: 1.7, paint: paint.stone },
+  { name: 'stone', cell: [4, 4, 2], worldW: 7, worldH: 3.6, paint: paint.stone },
   { name: 'metalPanel', cell: [4, 4, 3], worldW: 3, worldH: 3, reflect: 0.35, paint: paint.metalPanel },
   { name: 'poolWater', cell: [5, 4, 0], worldW: 6, worldH: 6, reflect: 0.5, glow: GLOW.always, paint: paint.poolWater },
   { name: 'greenery', cell: [5, 4, 1], worldW: 3, worldH: 3, paint: paint.greenery },

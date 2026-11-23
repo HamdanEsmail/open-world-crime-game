@@ -258,11 +258,11 @@ export function createExplosionEffects(game, particles, skidMarks, groundAt) {
     s.size0 = r * 1.2;
     s.size1 = r * 6.5;
     s.life = 1.0;
-    ramp(s, sandy ? 0xead09a : 0xd8c8ac, sandy ? 0xe2c48a : 0xcdbfa6, sandy ? 0xdcc08c : 0xc4b8a4, 0.5);
-    s.alpha = 0.6;
-    s.fadeIn = 0.02;
-    s.fadeOut = 0.3;
-    s.lit = 0.7;
+    ramp(s, sandy ? 0xdcc08a : 0xbcae96, sandy ? 0xd4b57e : 0xb0a490, sandy ? 0xcdb486 : 0xa89e90, 0.5);
+    s.alpha = 0.38;
+    s.fadeIn = 0.04;
+    s.fadeOut = 0.25;
+    s.lit = 1;
     particles.emit(s);
   }
 
@@ -383,6 +383,12 @@ export function createExplosionEffects(game, particles, skidMarks, groundAt) {
     s.rotVel = spread(0.4);
     const grey = Math.random() < 0.35;
     ramp(s, grey ? 0x4c443d : 0x3a322c, grey ? 0x403a35 : 0x2a2522, 0x5e5953, 0.35);
+    if (b.age < FIRE_SECONDS * 0.7) {
+      // Smoke leaving the flames is lit orange from below for a moment, then cools to plain smoke.
+      s.c0.setHex(0x8a4418);
+      s.mid = 0.22;
+      s.glowEnd = 0.22;
+    }
     s.alpha = 0.78 * (0.45 + 0.55 * strength);
     s.fadeIn = 0.06;
     s.fadeOut = 0.5;

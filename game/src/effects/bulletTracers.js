@@ -112,9 +112,9 @@ export function emitMuzzleFlash(particles, x, y, z, dirX, dirY, dirZ, scale = 1)
   s.y = y + uy * 0.12 * scale;
   s.z = z + uz * 0.12 * scale;
   s.rot = Math.random() * 6.28;
-  s.size0 = 0.42 * scale;
-  s.size1 = 0.62 * scale;
-  s.life = 0.055;
+  s.size0 = 0.75 * scale;
+  s.size1 = 0.95 * scale;
+  s.life = 0.06;
   s.c0.setHex(0xfff6d8);
   s.c1.setHex(0xffd890);
   s.c2.setHex(0xffb650);

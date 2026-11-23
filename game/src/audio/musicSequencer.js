@@ -1,8 +1,7 @@
-// The step sequencer behind every music station: a composer describes songs (key, tempo, form, motifs)
-// and bars (a list of hits and notes on a sixteen-step grid); the sequencer plays them a little ahead
-// on the audio clock, swings the off-steps, and moves from song to song forever. Songs and bars are
-// pure functions of a seed, so a station can be joined mid-song exactly where it "would" be.
-// Also here: the scales, chords, voice leading and motif writing the composers share.
+// The step sequencer behind every music station: a composer plans songs (key, tempo, form, motifs) and
+// writes bars on a sixteen-step grid; the sequencer plays them just ahead on the audio clock, swung, song
+// after song forever. Songs are pure functions of a seed, so a station can be joined mid-song. Also the
+// scales, chords, voice leading and motif writing the composers share.
 import { playInstrument } from './synthInstruments.js';
 
 /** Silence between two songs, in seconds. */
@@ -124,6 +123,14 @@ export function scaleNote(root, scale, degree) {
   const octave = Math.floor(degree / n);
   const index = ((degree % n) + n) % n;
   return root + octave * 12 + scale[index];
+}
+
+/** Move a note by octaves until it lies between `low` and `high` (a bass line between A1 and B2 by default). */
+export function fitRegister(midi, low = 33, high = 47) {
+  let m = midi;
+  while (m > high) m -= 12;
+  while (m < low) m += 12;
+  return m;
 }
 
 /** A chord on a scale degree: `size` notes stacked in thirds (3 a triad, 4 a seventh, 5 a ninth). */

@@ -197,10 +197,10 @@ export function createGroundMeshBuilder(game, chunkOf) {
     box(layer, x0, z0, x1, z1, y0, y1, topSurface, sideSurface, options = {}) {
       builder.rect(layer, x0, z0, x1, z1, y1, topSurface, { tint: options.topTint === undefined ? options.tint : options.topTint, jitter: options.jitter, cell: options.cell || 40, rotate: options.rotate });
       const sideOptions = { tint: options.sideTint === undefined ? options.tint : options.sideTint, jitter: options.jitter, shadeBottom: options.shadeBottom };
-      builder.face(layer, x1, z0, x0, z0, y0, y1, y0, y1, sideSurface, sideOptions);
-      builder.face(layer, x0, z1, x1, z1, y0, y1, y0, y1, sideSurface, sideOptions);
-      builder.face(layer, x0, z0, x0, z1, y0, y1, y0, y1, sideSurface, sideOptions);
-      builder.face(layer, x1, z1, x1, z0, y0, y1, y0, y1, sideSurface, sideOptions);
+      builder.face(layer, x0, z0, x1, z0, y0, y1, y0, y1, sideSurface, sideOptions);
+      builder.face(layer, x1, z1, x0, z1, y0, y1, y0, y1, sideSurface, sideOptions);
+      builder.face(layer, x0, z1, x0, z0, y0, y1, y0, y1, sideSurface, sideOptions);
+      builder.face(layer, x1, z0, x1, z1, y0, y1, y0, y1, sideSurface, sideOptions);
     },
 
     /** A flat ring sector (annulus between two radii, between two angles) for plazas and drives. */
@@ -274,4 +274,44 @@ export function createGroundMeshBuilder(game, chunkOf) {
     wobble,
   };
   return builder;
+}
+
+/**
+ * A rectangle minus a set of rectangles, as a list of rectangles (vertical slabs between every hole
+ * edge, joined back together where they line up). Used to leave room for lots, gardens and pools.
+ * @returns {{x0:number, z0:number, x1:number, z1:number}[]}
+ */
+export function subtractRects(rect, holes) {
+  const clipped = [];
+  for (const h of holes) {
+    const x0 = Math.max(rect.x0, h.x0);
+    const x1 = Math.min(rect.x1, h.x1);
+    const z0 = Math.max(rect.z0, h.z0);
+    const z1 = Math.min(rect.z1, h.z1);
+    if (x1 - x0 > 0.01 && z1 - z0 > 0.01) clipped.push({ x0, x1, z0, z1 });
+  }
+  const xs = [rect.x0, rect.x1];
+  for (const h of clipped) xs.push(h.x0, h.x1);
+  xs.sort((a, b) => a - b);
+  const slabs = [];
+  for (let i = 0; i < xs.length - 1; i += 1) {
+    const xa = xs[i];
+    const xb = xs[i + 1];
+    if (xb - xa < 0.01) continue;
+    const covered = clipped.filter((h) => h.x0 <= xa + 0.001 && h.x1 >= xb - 0.001).map((h) => [h.z0, h.z1]).sort((p, q) => p[0] - q[0]);
+    let z = rect.z0;
+    for (const [z0, z1] of covered) {
+      if (z0 - z > 0.01) slabs.push({ x0: xa, x1: xb, z0: z, z1: z0 });
+      z = Math.max(z, z1);
+    }
+    if (rect.z1 - z > 0.01) slabs.push({ x0: xa, x1: xb, z0: z, z1: rect.z1 });
+  }
+  slabs.sort((p, q) => p.z0 - q.z0 || p.z1 - q.z1 || p.x0 - q.x0);
+  const out = [];
+  for (const r of slabs) {
+    const last = out[out.length - 1];
+    if (last && Math.abs(last.z0 - r.z0) < 0.01 && Math.abs(last.z1 - r.z1) < 0.01 && Math.abs(last.x1 - r.x0) < 0.01) last.x1 = r.x1;
+    else out.push({ ...r });
+  }
+  return out;
 }

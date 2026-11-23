@@ -3,13 +3,6 @@
 // when stuck against something, and chase another vehicle, either leading it or lining up a PIT on
 // its rear quarter. It only writes vehicle.controls; the handling does the rest.
 
-/** Steering per radian of heading error (then clamped to full lock). */
-const STEER_GAIN = 2.4;
-/** Seconds of full throttle without moving before the driver decides it is stuck. */
-const STUCK_AFTER = 1.1;
-/** Seconds spent reversing out once stuck. */
-const BACK_OUT_TIME = 1.3;
-
 /**
  * Build game.vehicles.autopilot.
  * @param {Object} game
@@ -17,6 +10,7 @@ const BACK_OUT_TIME = 1.3;
  */
 export function createVehicleAutopilot(game, vehicles) {
   const ahead = { vehicle: null, character: null, distance: Infinity };
+  const chaseOptions = { aggression: 0.8, allowReverse: true, holdPace: false };
 
   /**
    * Write vehicle.controls to drive toward (targetX, targetZ) at about `desiredSpeed` m/s.
@@ -27,8 +21,9 @@ export function createVehicleAutopilot(game, vehicles) {
    * @param {number} targetX
    * @param {number} targetZ
    * @param {number} desiredSpeed  m/s
-   * @param {{stopAtTarget?:boolean, arriveRadius?:number, allowReverse?:boolean, aggression?:number}} [options]
-   *        aggression 0 (careful) .. 1 (reckless: later braking, harder cornering, handbrake turns)
+   * @param {{stopAtTarget?:boolean, arriveRadius?:number, allowReverse?:boolean, aggression?:number, holdPace?:boolean}} [options]
+   *        aggression 0 (careful) .. 1 (reckless: later braking, harder cornering, handbrake turns);
+   *        holdPace keeps the speed through the turn (no slowing for the corner), as when ramming
    * @returns {number} the distance to the target
    */
   function driveToward(vehicle, targetX, targetZ, desiredSpeed, options) {
@@ -49,7 +44,9 @@ export function createVehicleAutopilot(game, vehicles) {
     const aggression = options && options.aggression !== undefined ? clamp(options.aggression, 0, 1) : 0.4;
     const profile = vehicle.dynamics.profile;
     const speed = vehicle.speed;
-    const angle = wrapAngle(Math.atan2(dx, dz) - vehicle.heading);
+    let angle = wrapAngle(Math.atan2(dx, dz) - vehicle.heading);
+    // After backing out of a jam, swing out to one side for a moment to find a way round it.
+    if (pilot.detourUntil > now) angle = wrapAngle(angle + pilot.detourSide * 1.1);
     const absAngle = Math.abs(angle);
 
     // Backing out of a jam or a tight spot.
@@ -85,12 +82,13 @@ export function createVehicleAutopilot(game, vehicles) {
     // The fastest speed that still makes the turn: the circle through the car and the target,
     // tangent to its heading, at the tyres' grip (a reckless driver leans on the grip harder).
     let target = desiredSpeed;
-    if (absAngle > 0.04) {
+    const holdPace = !!(options && options.holdPace);
+    if (absAngle > 0.04 && !holdPace) {
       const radius = distance / (2 * Math.sin(Math.min(absAngle, 1.5)));
       const corner = Math.sqrt(profile.grip * 9.81 * (0.7 + 0.3 * aggression) * radius);
       if (corner < target) target = Math.max(corner, 5);
     }
-    if (absAngle > 1.7 && distance > 16) target = Math.min(target, 6 + 6 * aggression);
+    if (absAngle > 1.7 && distance > 16 && !holdPace) target = Math.min(target, 6 + 6 * aggression);
     if (stopAtTarget) {
       const room = Math.max(0, distance - arriveRadius * 0.5);
       const stopping = Math.sqrt(2 * profile.braking * (0.45 + 0.25 * aggression) * room);
@@ -118,7 +116,10 @@ export function createVehicleAutopilot(game, vehicles) {
     if (allowReverse && pilot.stuckTime > STUCK_AFTER) {
       pilot.stuckTime = 0;
       pilot.reverseUntil = now + BACK_OUT_TIME;
-      pilot.reverseSteer = steer >= 0 ? -1 : 1;
+      pilot.detourSide = -pilot.detourSide;
+      pilot.detourUntil = now + BACK_OUT_TIME + DETOUR_TIME;
+      // Reverse with the wheel turned so the nose swings toward the side of the detour.
+      pilot.reverseSteer = pilot.detourSide > 0 ? 1 : -1;
     }
     return distance;
   }
@@ -159,18 +160,50 @@ export function createVehicleAutopilot(game, vehicles) {
     const lead = Math.min(1.6, distance / Math.max(8, Math.abs(vehicle.speed)));
     let aimX = target.pos.x + target.vel.x * lead;
     let aimZ = target.pos.z + target.vel.z * lead;
-    let pace = distance > 28 ? top : Math.max(target.speed + (ram ? 5 : 1.5), 8);
-    if (ram && distance < 22) {
-      // The rear quarter on whichever side the chaser already is.
-      const ts = Math.sin(target.heading);
-      const tc = Math.cos(target.heading);
-      const side = (vehicle.pos.x - target.pos.x) * tc - (vehicle.pos.z - target.pos.z) * ts >= 0 ? 1 : -1;
+    let pace = distance > 28 ? top : Math.max(target.speed + 1.5, 8);
+    let striking = false;
+    if (ram && distance < 30) {
+      // A PIT in two moves: draw alongside so the chaser's nose sits beside the target's rear
+      // quarter, then turn in across it. Work in the target's frame (forward f, left l).
+      const fs = Math.sin(target.heading);
+      const fc = Math.cos(target.heading);
+      const rx = vehicle.pos.x - target.pos.x;
+      const rz = vehicle.pos.z - target.pos.z;
+      const along = rx * fs + rz * fc;
+      const across = rx * fc - rz * fs;
+      const pilot = memoryOf(vehicle);
+      if (Math.abs(across) > 0.8) pilot.ramSide = across > 0 ? 1 : -1;
+      else if (!pilot.ramSide) pilot.ramSide = 1;
+      const side = pilot.ramSide;
       const tp = target.dynamics.profile;
-      aimX = target.pos.x - ts * tp.halfLength * 0.75 + tc * side * tp.halfWidth * 0.6 + target.vel.x * 0.3;
-      aimZ = target.pos.z - tc * tp.halfLength * 0.75 - ts * side * tp.halfWidth * 0.6 + target.vel.z * 0.3;
-      pace = Math.max(target.speed + 6, 10);
+      const now = game.time ? game.time.elapsed : 0;
+      // The slot: the chaser's nose level with the target's rear axle, a car's gap out to the side.
+      const slotAlong = -(tp.halfLength * 0.6 + profile.halfLength * 0.85);
+      const slotAcross = side * (tp.halfWidth + profile.halfWidth + 0.9);
+      const lookAhead = Math.max(4, Math.abs(target.speed) * 0.45);
+      const touching = Math.abs(across) < tp.halfWidth + profile.halfWidth + 0.3 && along > -(tp.halfLength + profile.halfLength);
+      if (pilot.strikeUntil > now && touching) {
+        // Contact made: peel off and line up again rather than lean on the target.
+        pilot.strikeUntil = -1;
+        pilot.ramRecover = now + 1.2;
+      }
+      if (pilot.strikeUntil <= now && pilot.ramRecover <= now
+        && Math.abs(along - slotAlong) < 1.3 && Math.abs(across - slotAcross) < 1.0) {
+        pilot.strikeUntil = now + 0.8;
+      }
+      striking = pilot.strikeUntil > now;
+      const recovering = pilot.ramRecover > now;
+      // Strike: turn in through the target's rear corner. Otherwise hold the slot (wider while recovering).
+      const holdAcross = recovering ? slotAcross + side * 1.2 : slotAcross;
+      const aimAlong = striking ? -tp.halfLength * 0.9 + lookAhead * 0.3 : slotAlong + lookAhead;
+      const aimAcross = striking ? -side * tp.halfWidth * 0.5 : holdAcross;
+      aimX = target.pos.x + fs * aimAlong + fc * aimAcross;
+      aimZ = target.pos.z + fc * aimAlong - fs * aimAcross;
+      pace = Math.max(6, target.speed + clamp((slotAlong - along) * 0.9, -6, 9) + (striking ? 2 : 0));
     }
-    driveToward(vehicle, aimX, aimZ, Math.min(pace, top), { aggression, allowReverse: true });
+    chaseOptions.aggression = aggression;
+    chaseOptions.holdPace = striking;
+    driveToward(vehicle, aimX, aimZ, Math.min(pace, top), chaseOptions);
     return distance;
   }
 
@@ -245,7 +278,7 @@ export function createVehicleAutopilot(game, vehicles) {
 function memoryOf(vehicle) {
   let pilot = vehicle.dynamics.pilot;
   if (!pilot) {
-    pilot = { stuckTime: 0, reverseUntil: -1, reverseSteer: 0 };
+    pilot = { stuckTime: 0, reverseUntil: -1, reverseSteer: 0, detourUntil: -1, detourSide: 1, ramSide: 0, strikeUntil: -1, ramRecover: -1 };
     vehicle.dynamics.pilot = pilot;
   }
   return pilot;
@@ -269,3 +302,12 @@ function wrapAngle(angle) {
 function clamp(value, min, max) {
   return value < min ? min : value > max ? max : value;
 }
+
+/** Steering per radian of heading error (then clamped to full lock). */
+const STEER_GAIN = 2.4;
+/** Seconds of full throttle without moving before the driver decides it is stuck. */
+const STUCK_AFTER = 1.1;
+/** Seconds spent reversing out once stuck. */
+const BACK_OUT_TIME = 1.3;
+/** Seconds spent swinging out to one side after backing out, to find a way round. */
+const DETOUR_TIME = 2.2;

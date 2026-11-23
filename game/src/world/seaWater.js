@@ -4,6 +4,7 @@
 // edge that dissolves into the haze so the sea meets the sky without a seam. No extra render passes.
 import * as THREE from 'three';
 import { SKY_COLOR_GLSL, createSkyColorUniforms } from './skyDome.js';
+import { getSkyNoiseTexture, periodicValueNoise } from './skyNoiseTexture.js';
 
 /**
  * Create the sea and add it to the scene. Returns the object the game keeps as game.sea.
@@ -41,7 +42,8 @@ export function createSeaWater(game, options = {}) {
   const mesh = new THREE.Mesh(geometry, material);
   mesh.name = 'gulfSea';
   mesh.position.y = seaLevel;
-  mesh.renderOrder = 1;
+  // First among see-through things, so splashes, wakes and glows over the water blend on top of it.
+  mesh.renderOrder = -10;
   mesh.receiveShadow = false;
   mesh.castShadow = false;
   game.scene.add(mesh);
@@ -72,8 +74,13 @@ export function createSeaWater(game, options = {}) {
   }
 
   /** Move the water, and follow the sky's colours, the light and the haze. */
-  function update(dt) {
+  function update() {
     if (!shoreMapFromTerrain && game.terrain) rebuildShoreMap();
+    followTheSky();
+  }
+
+  /** Copy the sky's colours, the active light, the haze and the wind's chop into the shader. */
+  function followTheSky() {
     const u = uniforms;
     u.uTime.value = game.time.elapsed;
     const sky = game.sky;
@@ -101,7 +108,7 @@ export function createSeaWater(game, options = {}) {
     u.uGlitter.value = 1 - storm * 0.85;
   }
 
-  update(0);
+  followTheSky();
   return sea;
 }
 
@@ -118,6 +125,7 @@ function createSeaUniforms(game, shoreMap, rect, extent) {
     ...createSkyColorUniforms(),
     uTime: { value: 0 },
     uRipples: { value: createRippleTexture(game, RIPPLE_SIZE) },
+    uNoiseMap: { value: getSkyNoiseTexture(game) },
     uShoreMap: { value: shoreMap },
     uShoreRect: { value: new THREE.Vector4(rect.minX, rect.minZ, 1 / (rect.maxX - rect.minX), 1 / (rect.maxZ - rect.minZ)) },
     uShoreZ: { value: extent.shoreZ },
@@ -188,10 +196,10 @@ function createRippleTexture(game, size) {
       let h = 0;
       for (let o = 0; o < octaves.length; o += 1) {
         const octave = octaves[o];
-        h += periodicNoise(hash, (i / size) * octave.cellsX, (j / size) * octave.cellsZ, octave.cellsX, octave.cellsZ, o * 31 + 7) * octave.weight;
+        h += periodicValueNoise(hash, (i / size) * octave.cellsX, (j / size) * octave.cellsZ, octave.cellsX, octave.cellsZ, o * 31 + 7) * octave.weight;
       }
-      h += 0.35 * Math.sin(((i * 3 + j * 5) / size) * Math.PI * 2);
-      h += 0.22 * Math.sin(((i * -4 + j * 7) / size) * Math.PI * 2 + 1.3);
+      h += 0.14 * Math.sin(((i * 3 + j * 5) / size) * Math.PI * 2);
+      h += 0.09 * Math.sin(((i * -4 + j * 7) / size) * Math.PI * 2 + 1.3);
       heights[j * size + i] = h;
     }
   }
@@ -224,25 +232,6 @@ function createRippleTexture(game, size) {
   return texture;
 }
 
-/** Smooth value noise that repeats every `periodX` by `periodZ` cells. */
-function periodicNoise(hash, x, z, periodX, periodZ, seed) {
-  const ix = Math.floor(x);
-  const iz = Math.floor(z);
-  const fx = x - ix;
-  const fz = z - iz;
-  const ux = fx * fx * (3 - 2 * fx);
-  const uz = fz * fz * (3 - 2 * fz);
-  const x0 = ((ix % periodX) + periodX) % periodX;
-  const x1 = (x0 + 1) % periodX;
-  const z0 = ((iz % periodZ) + periodZ) % periodZ;
-  const z1 = (z0 + 1) % periodZ;
-  const a = hash(x0, z0, seed);
-  const b = hash(x1, z0, seed);
-  const c = hash(x0, z1, seed);
-  const d = hash(x1, z1, seed);
-  return (a + (b - a) * ux) * (1 - uz) + (c + (d - c) * ux) * uz - 0.5;
-}
-
 const SHORE_MAP_WIDTH = 512;
 const SHORE_MAP_HEIGHT = 96;
 const RIPPLE_SIZE = 256;
@@ -262,6 +251,7 @@ void main() {
 const SEA_FRAGMENT = /* glsl */ `
 uniform float uTime;
 uniform sampler2D uRipples;
+uniform sampler2D uNoiseMap;
 uniform sampler2D uShoreMap;
 uniform vec4 uShoreRect;
 uniform float uShoreZ;
@@ -304,11 +294,12 @@ vec3 rippleNormal(vec2 xz, float dist) {
 
 // Lines of foam that roll in over the shallows and gather at the waterline.
 float shoreFoam(float depth, vec2 xz) {
-  float wobble = sarabNoise(xz * 0.06 + vec2(uTime * 0.05, 0.0));
+  float wobble = texture2D(uNoiseMap, xz * 0.015 + vec2(uTime * 0.0125, 0.0)).g;
+  float speckle = texture2D(uNoiseMap, xz * 0.0047 - vec2(uTime * 0.0022)).a;
   float edge = smoothstep(0.5, 0.0, depth + (wobble - 0.5) * 0.3);
   float phase = depth * 19.0 - uTime * 1.1 + wobble * 3.0;
   float band = smoothstep(0.78, 0.98, sin(phase) * 0.5 + 0.5);
-  float bands = band * smoothstep(1.3, 0.25, depth) * (0.35 + 0.65 * sarabNoise(xz * 0.15 - uTime * 0.07));
+  float bands = band * smoothstep(1.3, 0.25, depth) * (0.35 + 0.65 * speckle);
   return clamp(edge * 0.9 + bands * 0.8, 0.0, 1.0);
 }
 
@@ -339,7 +330,7 @@ void main() {
   vec3 glitter = uLightColor * (sheen + sparkle) * uGlitter;
   col += glitter;
 
-  float foam = shoreFoam(depth, vWorld.xz);
+  float foam = depth < 1.6 ? shoreFoam(depth, vWorld.xz) : 0.0;
   vec3 foamLit = uFoamColor * (uAmbient * 1.6 + uLightColor * (0.35 + 0.65 * lightUp));
   col = mix(col, foamLit, foam);
 

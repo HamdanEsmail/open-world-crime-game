@@ -4,20 +4,7 @@
 // clock, so two cars never lock in phase.
 import { makeDrive } from './synthPrimitives.js';
 import { dopplerFactor } from './engineSound.js';
-
-/** How each siren pattern sweeps: the shape and rate of the sweep, its centre and width in Hz. */
-export const SIREN_PATTERNS = {
-  wail: { shape: 'triangle', rate: 0.32, centre: 1000, width: 430 },
-  yelp: { shape: 'sawtooth', rate: 3.6, centre: 1060, width: 390 },
-  hilo: { shape: 'square', rate: 0.95, centre: 820, width: 140 },
-};
-
-/** Per voice: a slightly different rate and the cycle of patterns it moves through. */
-const VOICE_CHARACTERS = [
-  { rateScale: 1.0, cycle: ['wail', 'yelp'], holds: [7.5, 3.5] },
-  { rateScale: 1.13, cycle: ['yelp', 'wail'], holds: [4.0, 6.5] },
-  { rateScale: 0.91, cycle: ['hilo', 'wail', 'yelp'], holds: [5.0, 6.0, 3.0] },
-];
+import { sirenPatternForUnit } from './radioAndSoundGuide.js';
 
 /**
  * Give the three nearest units with their siren on a voice each, every frame.
@@ -69,7 +56,7 @@ export function createSirenChorus(engine, game) {
       slot.silentFor = 0;
       if (!slot.voice) {
         slot.voice = createSirenVoice(engine.ctx, engine.buses.effects, VOICE_CHARACTERS[s].rateScale);
-        slot.voice.setPattern(VOICE_CHARACTERS[s].cycle[slot.pattern], t);
+        slot.voice.setPattern(sirenPatternForUnit(s, slot.pattern), t);
       }
       advancePattern(slot, s, dt, t);
       engine.spatialize(v.pos.x, 1.6, v.pos.z, range, spot);
@@ -83,8 +70,8 @@ export function createSirenChorus(engine, game) {
     slot.patternTime += dt;
     if (slot.patternTime >= character.holds[slot.pattern]) {
       slot.patternTime = 0;
-      slot.pattern = (slot.pattern + 1) % character.cycle.length;
-      slot.voice.setPattern(character.cycle[slot.pattern], t);
+      slot.pattern = (slot.pattern + 1) % character.holds.length;
+      slot.voice.setPattern(sirenPatternForUnit(index, slot.pattern), t);
     }
   }
 
@@ -181,7 +168,7 @@ export function createSirenVoice(ctx, destination, rateScale = 1) {
       const cents = 1200 * Math.log2(Math.max(0.5, Math.min(2, doppler || 1)));
       saw.detune.setTargetAtTime(cents, when, 0.06);
       square.detune.setTargetAtTime(cents, when, 0.06);
-      level.gain.setTargetAtTime(Math.max(0, gain), when, 0.06);
+      level.gain.setTargetAtTime(Math.max(0, gain) * SIREN_TRIM, when, 0.06);
       distanceFilter.frequency.setTargetAtTime(Math.max(500, Math.min(8000, cutoff)), when, 0.1);
       if (panner) panner.pan.setTargetAtTime(Math.max(-1, Math.min(1, pan)), when, 0.06);
     },
@@ -190,6 +177,27 @@ export function createSirenVoice(ctx, destination, rateScale = 1) {
       sweep.stop(when + 0.3);
       saw.stop(when + 0.3);
       square.stop(when + 0.3);
+      setTimeout(() => level.disconnect(), Math.max(400, (when - ctx.currentTime + 0.5) * 1000));
     },
   };
 }
+
+/** How each siren pattern sweeps: the shape and rate of the sweep, its centre and width in Hz. */
+export const SIREN_PATTERNS = {
+  wail: { shape: 'triangle', rate: 0.32, centre: 1000, width: 430 },
+  yelp: { shape: 'sawtooth', rate: 3.6, centre: 1060, width: 390 },
+  hilo: { shape: 'square', rate: 0.95, centre: 820, width: 140 },
+};
+
+/** The driven siren tone is dense; this keeps a passing unit under the gunfire. */
+const SIREN_TRIM = 0.3;
+
+/**
+ * Per voice: a slightly different sweep rate and how long each pattern of its cycle (from the guide's
+ * sirenPatternForUnit) is held, in seconds.
+ */
+const VOICE_CHARACTERS = [
+  { rateScale: 1.0, holds: [7.5, 3.5] },
+  { rateScale: 1.13, holds: [4.0, 6.5] },
+  { rateScale: 0.91, holds: [5.0, 6.0, 3.0] },
+];

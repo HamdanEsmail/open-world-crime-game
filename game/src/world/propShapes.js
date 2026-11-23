@@ -81,7 +81,6 @@ export function createShapeBuilder() {
 
   /** A bent rod through `points` ([x, y, z] each) with `sides` faces; open ends. */
   function tube(points, radius, sides, o = {}) {
-    const ring = [];
     const dir = new THREE.Vector3();
     const side = new THREE.Vector3();
     const up = new THREE.Vector3();
@@ -110,7 +109,6 @@ export function createShapeBuilder() {
     for (let i = 0; i < rows.length - 1; i += 1) {
       for (let k = 0; k < sides; k += 1) quad(rows[i][k], rows[i][k + 1], rows[i + 1][k + 1], rows[i + 1][k]);
     }
-    ring.length = 0;
     return builder;
   }
 
@@ -158,6 +156,26 @@ export function createShapeBuilder() {
     },
     get vertexCount() {
       return positions.length / 3;
+    },
+    /**
+     * Point the normals of every vertex from index `start` on away from `center` and up by `lift`:
+     * leaf cards then shade like one soft rounded mass instead of flat panels.
+     */
+    bendNormals(start, center, lift = 0.6) {
+      for (let i = start; i < positions.length / 3; i += 1) {
+        let nx = positions[i * 3] - center.x;
+        let ny = positions[i * 3 + 1] - center.y;
+        let nz = positions[i * 3 + 2] - center.z;
+        const length = Math.hypot(nx, ny, nz) || 1;
+        nx /= length;
+        ny = ny / length + lift;
+        nz /= length;
+        const length2 = Math.hypot(nx, ny, nz) || 1;
+        normals[i * 3] = nx / length2;
+        normals[i * 3 + 1] = ny / length2;
+        normals[i * 3 + 2] = nz / length2;
+      }
+      return builder;
     },
     /** Finish: one indexed BufferGeometry with bounds computed. */
     build() {

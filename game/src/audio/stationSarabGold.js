@@ -2,19 +2,16 @@
 // octave bass, bright brass-synth stabs on the off-beats and a singing lead in the choruses, written
 // fresh for every song from seeded chord progressions, bass rhythms and motifs.
 import {
-  SCALES, scaleChord, scaleNote, voiceChord, makeMotif, varyMotif, motifBar, buildForm, sectionAt, setTempo, nameSong,
+  SCALES, scaleChord, scaleNote, voiceChord, makeMotif, varyMotif, motifBar, buildForm, sectionAt, setTempo, nameSong, fitRegister,
 } from './musicSequencer.js';
+import { RADIO_STATION_GUIDE } from './radioAndSoundGuide.js';
 
-/** The station and its composer. */
+/** The station (its name, host and tagline come from the guide) and its composer. */
 export const SARAB_GOLD = {
-  id: 'sarab_gold',
-  name: 'Sarab Gold 98.6',
-  frequency: '98.6 FM',
-  host: 'Samira "Golden Hour" Qasim',
-  tagline: 'Sunset funk for the long drive home.',
+  ...RADIO_STATION_GUIDE.find((s) => s.id === 'sarab_gold'),
   color: '#e9b44c',
   kind: 'music',
-  mix: { level: 0.95, drums: 0.85, bass: 0.9, keys: 0.6, lead: 0.55, fx: 0.5, reverb: 0.16, delay: 0.2, delaySteps: 3, tone: 15000 },
+  mix: { level: 0.26, drums: 0.85, bass: 0.9, keys: 0.6, lead: 0.55, fx: 0.5, reverb: 0.16, delay: 0.2, delaySteps: 3, tone: 15000 },
   makeSong,
   composeBar,
 };
@@ -78,7 +75,9 @@ function composeBar(song, bar, rng) {
   const degree = progression[sec.barIn % progression.length];
   const nextDegree = progression[(sec.barIn + 1) % progression.length];
   const chord = scaleChord(song.root, song.scale, degree, 4);
-  const nextRoot = scaleNote(song.root, song.scale, nextDegree);
+  const low = fitRegister(chord[0]) - chord[0];
+  const bassChord = [chord[0] + low, chord[1] + low, chord[2] + low, chord[3] + low];
+  const nextRoot = fitRegister(scaleNote(song.root, song.scale, nextDegree));
   const s = song.sounds;
   const ev = [];
   const chorus = name === 'chorus';
@@ -119,17 +118,18 @@ function composeBar(song, bar, rng) {
 
   // Bass: the song's funk rhythm on the chord, with whole notes under the break.
   if (name === 'break') {
-    ev.push({ step: 0, inst: 'bass', midi: chord[0], len: 14, vel: 0.55, p: s.bass });
+    ev.push({ step: 0, inst: 'bass', midi: bassChord[0], len: 14, vel: 0.55, p: s.bass });
   } else if (!quietStart) {
     const rhythm = song.bassRhythm;
+    const b = bassChord;
     for (let st = 0; st < 16; st += 1) {
       const role = rhythm[st];
       if (!role) continue;
-      if (role === 'A' && nextRoot === chord[0]) continue;
+      if (role === 'A' && nextRoot === b[0]) continue;
       let len = 1;
       while (len < 3 && st + len < 16 && !rhythm[st + len]) len += 1;
       if (role === 'O' || role === 'G') len = Math.min(len, role === 'G' ? 0.5 : 1);
-      const midi = role === 'R' ? chord[0] : role === 'O' ? chord[0] + 12 : role === '5' ? chord[2] : role === '7' ? chord[3] : role === 'A' ? nextRoot - 1 : chord[0];
+      const midi = role === 'R' ? b[0] : role === 'O' ? b[0] + 12 : role === '5' ? b[2] : role === '7' ? b[3] : role === 'A' ? nextRoot - 1 : b[0];
       ev.push({ step: st, inst: 'bass', midi, len, vel: role === 'G' ? 0.3 : st === 0 ? 1 : 0.8, p: s.bass });
     }
   }
@@ -150,7 +150,7 @@ function composeBar(song, bar, rng) {
     const phrase = Math.floor(sec.barIn / 2) % 2 === 0 ? song.motif : song.answer;
     motifBar(ev, phrase, sec.barIn % 2, song, degree, 24, 'lead', s.lead, 0.75, true);
   } else if (name === 'break' && sec.barIn >= 2) {
-    motifBar(ev, song.answer, sec.barIn % 2, song, degree, 12, 'lead', s.lead, 0.5, true);
+    motifBar(ev, song.answer, sec.barIn % 2, song, degree, 24, 'lead', s.lead, 0.45, true);
   }
 
   // A bright arpeggio rises through the second half of each verse and the outro.

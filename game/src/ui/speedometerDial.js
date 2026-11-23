@@ -1,7 +1,8 @@
 // The speedometer, bottom right while Zayd drives: an arc dial in km/h that sweeps from gulf teal
 // through sand gold to coral at the redline, a big digital readout, the gear, a body-damage bar
 // for the car and its invented model name. It replaces the weapon block at the wheel.
-import { createElement, setText, setClass, setStyle } from './uiElements.js';
+import { setText, setClass, setStyle } from './uiElements.js';
+import { speedometerScaleFor, speedometerAngleFor } from './hudAndMenuGuide.js';
 
 /**
  * Build the dial in `container` (#hud-speedometer).
@@ -53,7 +54,7 @@ export function createSpeedometerDial(game, container) {
     if (vehicle !== shownVehicle) {
       shownVehicle = vehicle;
       const spec = vehicle.spec || {};
-      maxKmh = Math.max(120, Math.ceil(((spec.topSpeed || 60) * 3.6 * 1.08) / 40) * 40);
+      maxKmh = speedometerScaleFor(spec.topSpeed);
       buildTicks(ticks, maxKmh);
       setText(name, (spec.name || 'Vehicle').toUpperCase());
       setText(vehicleClass, (spec.className || '').toUpperCase());
@@ -63,12 +64,13 @@ export function createSpeedometerDial(game, container) {
     if (kmh !== shownKmh) {
       shownKmh = kmh;
       value.textContent = String(kmh);
-      const fraction = Math.min(1, kmh / maxKmh);
+      const angle = speedometerAngleFor(kmh, maxKmh);
+      const fraction = (angle + 135) / 270;
       const dash = Math.round(fraction * ARC_LENGTH * 2) / 2;
       if (dash !== shownDash) {
         shownDash = dash;
         fill.setAttribute('stroke-dasharray', `${dash} 999`);
-        needle.setAttribute('transform', `rotate(${(-135 + fraction * 270).toFixed(1)} 100 100)`);
+        needle.setAttribute('transform', `rotate(${angle.toFixed(1)} 100 100)`);
       }
       setClass(container, 'is-redline', fraction > 0.86);
     }

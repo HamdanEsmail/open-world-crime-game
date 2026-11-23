@@ -10,7 +10,7 @@ import { paintLivery } from './vehicleLiveries.js';
  * livery, if any); `lamp` names the light that makes the lens glow (see LAMP_CODES).
  */
 export const VEHICLE_SURFACES = {
-  paint: { color: 0xffffff, paint: 1, roughness: 0.26, metalness: 0.5 },
+  paint: { color: 0xffffff, paint: 1, roughness: 0.17, metalness: 0.32 },
   paintSatin: { color: 0xd6d6d6, paint: 1, roughness: 0.55, metalness: 0.25 },
   glass: { color: 0x0b1118, roughness: 0.04, metalness: 0.45 },
   trim: { color: 0x1c1e22, roughness: 0.72, metalness: 0.05 },

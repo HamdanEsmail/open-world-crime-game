@@ -2,20 +2,17 @@
 // sevenths and ninths, a round bass, a lazy kick and rim under swung hats, a sparse bell melody, all
 // behind the dust and crackle of an old record and a gently wobbling tape. Written fresh every song.
 import {
-  SCALES, scaleChord, scaleNote, voiceChord, makeMotif, varyMotif, motifBar, buildForm, sectionAt, setTempo, nameSong,
+  SCALES, scaleChord, scaleNote, voiceChord, makeMotif, varyMotif, motifBar, buildForm, sectionAt, setTempo, nameSong, fitRegister,
 } from './musicSequencer.js';
+import { RADIO_STATION_GUIDE } from './radioAndSoundGuide.js';
 
-/** The station and its composer. `dust` asks the radio for the record's crackle under everything. */
+/** The station (facts from the guide) and its composer. `dust` asks for a record's crackle under everything. */
 export const MARINA_LOUNGE = {
-  id: 'marina_lounge',
-  name: 'Marina Lounge 88.8',
-  frequency: '88.8 FM',
-  host: 'Teo Varga',
-  tagline: 'Slow tides, soft keys, no hurry.',
+  ...RADIO_STATION_GUIDE.find((s) => s.id === 'marina_lounge'),
   color: '#8fd3c8',
   kind: 'music',
   dust: 0.06,
-  mix: { level: 1.25, drums: 0.8, bass: 0.85, keys: 0.8, lead: 0.55, fx: 0.4, reverb: 0.22, delay: 0.18, delaySteps: 6, tone: 4800 },
+  mix: { level: 0.23, drums: 0.8, bass: 0.85, keys: 0.8, lead: 0.55, fx: 0.4, reverb: 0.22, delay: 0.18, delaySteps: 6, tone: 4800 },
   makeSong,
   composeBar,
 };
@@ -88,11 +85,11 @@ function composeBar(song, bar, rng) {
 
   // Bass: the root on the one, a fifth on the off-beat, a step toward the next chord.
   if (name !== 'intro' || sec.barIn >= 1) {
-    const root = chord[0];
+    const root = fitRegister(chord[0], 34, 46);
     ev.push({ step: 0, inst: 'bass', midi: root, len: 6, vel: 0.85, p: s.bass });
-    ev.push({ step: rng.pick([7, 10]), inst: 'bass', midi: chord[2] - 12 >= 28 ? chord[2] - 12 : chord[2], len: 3, vel: 0.6, p: s.bass });
+    ev.push({ step: rng.pick([7, 10]), inst: 'bass', midi: root + (chord[2] - chord[0]), len: 3, vel: 0.6, p: s.bass });
     if (nextDegree !== degree && rng.chance(0.6)) {
-      const nextRoot = scaleNote(song.root, song.scale, nextDegree);
+      const nextRoot = fitRegister(scaleNote(song.root, song.scale, nextDegree), 34, 46);
       ev.push({ step: 14, inst: 'bass', midi: nextRoot + (nextRoot > root ? -1 : 1), len: 2, vel: 0.5, p: s.bass });
     }
   }

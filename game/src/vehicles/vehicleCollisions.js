@@ -1,29 +1,7 @@
 // Vehicles meeting the world: glancing off walls and buildings (and flattening the lamp posts, signs
 // and hydrants that give way), shunting, ramming and spinning each other by mass and by where they
 // are struck, which is what makes a police PIT work, and knocking down whoever steps in front of them.
-
-/** Bounce off a wall: low, so cars thud and scrape rather than ping-pong. */
-const WALL_RESTITUTION = 0.12;
-const WALL_FRICTION = 0.3;
-const CAR_RESTITUTION = 0.2;
-const CAR_FRICTION = 0.4;
-/** A change of speed (m/s) a vehicle shrugs off before it starts to take damage. */
-const DAMAGE_THRESHOLD = 4.5;
-/** Share of a vehicle's health lost per m/s of speed change beyond the threshold. */
-const DAMAGE_PER_MS = 0.024;
-/** Closing speed (m/s) that counts as a real impact worth an event. */
-const IMPACT_SPEED = 1.5;
-/** Seconds between two collision events for the same pair of things. */
-const EVENT_COOLDOWN = 0.3;
-/** Faster than this (m/s) a car knocks a person down; slower, it nudges them aside. */
-const KNOCKDOWN_SPEED = 3;
-const PERSON_RADIUS = 0.35;
-const PERSON_MASS = 80;
-/** Seconds after a spinning hit during which a car's slide is not caught by the driving assists. */
-const SPIN_FREEDOM = 1.5;
-
-const GRID_CELL = 8;
-const GRID_BUCKETS = 512;
+import { crashDamageFromImpulse, propGivesWay, personHitDamage } from './drivingRules.js';
 
 /**
  * Build the collision stage of the vehicle simulation.
@@ -73,7 +51,7 @@ export function createVehicleCollisions(game, vehicles) {
       const pointVx = vel.x + yawRate * rz;
       const pointVz = vel.z - yawRate * rx;
       const normalSpeed = pointVx * c.nx + pointVz * c.nz;
-      if (collider.breakable && breaksProp(profile, -normalSpeed)) {
+      if (collider.breakable && propGivesWay(-normalSpeed, profile.mass)) {
         knockOverProp(vehicle, collider, c, -normalSpeed);
         continue;
       }
@@ -118,11 +96,7 @@ export function createVehicleCollisions(game, vehicles) {
     }
   }
 
-  /** A lamp post or sign gives way to a car that is fast or heavy enough. */
-  function breaksProp(profile, closing) {
-    return closing > 4 || (profile.mass > 4000 && closing > 1.5) || closing * profile.mass > 9000;
-  }
-
+  /** A lamp post or sign that gave way: it falls, the car carries on with a little less speed. */
   function knockOverProp(vehicle, collider, contact, closing) {
     const profile = vehicle.dynamics.profile;
     if (game.colliders.remove) game.colliders.remove(collider);
@@ -149,7 +123,7 @@ export function createVehicleCollisions(game, vehicles) {
       const count = grid.neighboursOf(a, list, nearby);
       for (let k = 0; k < count; k += 1) {
         const vb = list[nearby[k]];
-        if (va.dynamics.sleeping && vb.dynamics.sleeping) continue;
+        if (!vb || (va.dynamics.sleeping && vb.dynamics.sleeping)) continue;
         if (overlapBoxes(va, vb, pair)) collidePair(va, vb, pair);
       }
     }
@@ -340,7 +314,8 @@ export function createVehicleCollisions(game, vehicles) {
     const personVn = person.vel ? person.vel.x * contact.nx + person.vel.z * contact.nz : 0;
     const closing = pointVx * contact.nx + pointVz * contact.nz - personVn;
     const characters = game.characters;
-    if (closing > KNOCKDOWN_SPEED) {
+    const hurt = personHitDamage(closing);
+    if (hurt > 0) {
       if (recentlyHit(vehicle, person, now, 1.2)) return;
       const launchUp = Math.min(7.5, 1.6 + 0.17 * closing);
       const vx = pointVx * 0.85 + contact.nx * 1.5;
@@ -348,7 +323,7 @@ export function createVehicleCollisions(game, vehicles) {
       const source = vehicle.driver || null;
       if (characters.knockDown) characters.knockDown(person, vx, launchUp, vz, { source });
       if (characters.damage) {
-        characters.damage(person, (closing - 2.5) * 7, { source, kind: 'vehicle', dirX: contact.nx, dirZ: contact.nz });
+        characters.damage(person, hurt, { source, kind: 'vehicle', dirX: contact.nx, dirZ: contact.nz });
       }
       // The car loses a little speed to the body it hit.
       const loss = (PERSON_MASS * closing) / (profile.mass + PERSON_MASS);
@@ -474,10 +449,8 @@ export function createVehicleCollisions(game, vehicles) {
 
   /** Damage in proportion to the jolt (impulse over mass) beyond what a bumper soaks up. */
   function damageFromImpulse(vehicle, impulse, other) {
-    const profile = vehicle.dynamics.profile;
-    const jolt = impulse * profile.invMass;
-    if (jolt <= DAMAGE_THRESHOLD) return;
-    const amount = vehicle.maxHealth * DAMAGE_PER_MS * (jolt - DAMAGE_THRESHOLD);
+    const amount = crashDamageFromImpulse(impulse, vehicle.dynamics.profile.mass, vehicle.maxHealth);
+    if (amount <= 0) return;
     const source = other && other.driver ? other.driver : null;
     vehicles.applyDamage(vehicle, amount, { kind: 'crash', source, other });
   }
@@ -597,3 +570,20 @@ function rangeOfVehicle(vehicle, out) {
 function bucketOf(cx, cz) {
   return (Math.imul(cx, 73856093) ^ Math.imul(cz, 19349663)) & (GRID_BUCKETS - 1);
 }
+
+/** Bounce off a wall: low, so cars thud and scrape rather than ping-pong. */
+const WALL_RESTITUTION = 0.12;
+const WALL_FRICTION = 0.3;
+const CAR_RESTITUTION = 0.2;
+const CAR_FRICTION = 0.4;
+/** Closing speed (m/s) that counts as a real impact worth an event. */
+const IMPACT_SPEED = 1.5;
+/** Seconds between two collision events for the same pair of things. */
+const EVENT_COOLDOWN = 0.3;
+const PERSON_RADIUS = 0.35;
+const PERSON_MASS = 80;
+/** Seconds after a spinning hit during which a car's slide is not caught by the driving assists. */
+const SPIN_FREEDOM = 1.5;
+/** The broad-phase grid: cell size (m) and hash table size (a power of two). */
+const GRID_CELL = 8;
+const GRID_BUCKETS = 512;

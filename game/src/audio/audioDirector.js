@@ -1,10 +1,10 @@
-// game.audio: the conductor of everything Port Sarab sounds like. It opens the sound on the first click
-// or key, plays one-shots by name at world positions, listens to the game's events (crashes, gunfire,
-// fists, explosions, wanted stars, missions, cash, arrests, deaths) and answers each with the right
-// sound, follows the player's car (engine, tyres, horn, radio), the police sirens, passing traffic and
-// footsteps, keeps the city's ambience under it all, and muffles the world for pauses and close calls.
+// game.audio, the conductor of everything Port Sarab sounds like: plays one-shots by name at world
+// positions, answers the game's events (crashes, gunfire, fists, explosions, wanted stars, missions,
+// cash, arrests, deaths), follows the player's car and radio, sirens, traffic and footsteps, keeps the
+// city's ambience under it all, and muffles the world for pauses and close calls.
 import { createAudioEngine } from './audioEngine.js';
-import { playSoundRecipe, soundBusFor, weaponSoundClass, SOUND_IDS } from './soundEffects.js';
+import { playSoundRecipe, soundBusFor, SOUND_IDS } from './soundEffects.js';
+import { gunSoundForWeaponModel } from './radioAndSoundGuide.js';
 import { createPlayerCarSound, createTrafficEngines } from './engineSound.js';
 import { createSirenChorus } from './sirenSound.js';
 import { createRadioDial } from './radioStations.js';
@@ -134,22 +134,27 @@ export function createAudio(game) {
         ambienceClock = 0.05;
         ambience.apply(ambienceMixFor(game, radio.playing, ambienceMix), now);
       }
-      const paused = !!game.time?.paused || game.mode === 'paused' || game.mode === 'menu';
+      const inMenu = game.mode === 'menu';
+      const paused = !!game.time?.paused || game.mode === 'paused' || inMenu;
       deafness = Math.max(0, deafness - dt * 0.45);
       engine.setWorldMuffle(Math.max(paused ? 0.85 : 0, downed ? 0.7 : 0, deafness * 0.75));
-      engine.setMusicDuck(now < musicDuckUntil ? musicDuckLevel : paused ? 0.55 : 1);
+      engine.setMusicDuck(now < musicDuckUntil ? musicDuckLevel : paused && !inMenu ? 0.55 : 1);
     } catch (error) {
       warnOnce(error);
     }
   }
 
-  /** The radio plays while the player sits in a running car, and changes station on the radio key. */
+  /**
+   * The radio plays while the player sits in a running car (and behind the main menu), and changes
+   * station on the radio key.
+   */
   function followRadio() {
     const car = carSound.vehicle && !carSound.vehicle.wrecked ? carSound.vehicle : null;
-    if (car !== listeningCar) {
+    const listener = car || (game.mode === 'menu' ? MENU_LISTENER : null);
+    if (listener !== listeningCar) {
       if (listeningCar) radio.setListening(false);
-      if (car) radio.setListening(true, car);
-      listeningCar = car;
+      if (listener) radio.setListening(true, listener);
+      listeningCar = listener;
     }
     if (car && audio.handleRadioKey && game.input?.pressed?.('nextRadio')) radio.next();
   }
@@ -321,9 +326,9 @@ export function createAudio(game) {
     let spec = null;
     if (catalog && typeof catalog.weaponById === 'function') spec = catalog.weaponById(e.weaponId);
     else if (catalog && catalog.weaponById && typeof catalog.weaponById.get === 'function') spec = catalog.weaponById.get(e.weaponId);
-    const kind = weaponSoundClass(spec?.model || spec?.className || spec?.kind || e.weaponId);
+    const gunSound = gunSoundForWeaponModel(spec?.model || spec?.className || spec?.kind || e.weaponId);
     const byPlayer = e.shooter && e.shooter === game.player?.character;
-    play(GUN_SOUNDS[kind], { x, y: num(e.y, 1.4), z, range: 340, volume: byPlayer ? 1 : 0.9 });
+    play(gunSound, { x, y: num(e.y, 1.4), z, range: 340, volume: byPlayer ? 1 : 0.9 });
     const hx = num(e.hitX, NaN);
     const hz = num(e.hitZ, NaN);
     if (Number.isFinite(hx) && Number.isFinite(hz)) {
@@ -372,8 +377,10 @@ export function createAudio(game) {
   return audio;
 }
 
-const GUN_SOUNDS = { pistol: 'gunPistol', smg: 'gunSmg', rifle: 'gunRifle', shotgun: 'gunShotgun' };
 const NO_OPTIONS = Object.freeze({});
+
+/** Stands in for a car while the main menu is up, so the radio tunes Sarab Gold behind it. */
+const MENU_LISTENER = Object.freeze({ id: 0, spec: Object.freeze({ className: 'classic' }) });
 
 function num(value, fallback) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;

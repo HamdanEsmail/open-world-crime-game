@@ -83,9 +83,9 @@ function paintAsphalt(u, v, px, py, rgba) {
   const g = pixelHash(px, py, 2);
   const speck = g > 0.972 ? 30 : g < 0.03 ? -18 : (g - 0.5) * 12;
   const cluster = tileNoise(u, v, 48, 48, 3) > 0.72 ? 7 : 0;
-  const crack = Math.abs(tileFbm(u, v, 3, 3, 3, 7) - 0.5) < 0.0045 ? -20 : 0;
-  const base = 66 + mottle + speck + cluster + crack;
-  setRgb(rgba, base + 1, base + 2, base + 7);
+  const crack = Math.abs(tileFbm(u, v, 3, 3, 3, 7) - 0.5) < 0.0028 ? -9 : 0;
+  const base = 86 + mottle + speck + cluster + crack;
+  setRgb(rgba, base + 3, base + 2, base + 3);
 }
 
 /** Sun-bleached desert tarmac with crocodile cracking and sand dust caught in the cracks. */
@@ -217,9 +217,9 @@ function paintLawn(u, v, px, py, rgba) {
   const g = pixelHash(px, py, 35);
   const clump = (tileNoise(u, v, 24, 24, 36) - 0.5) * 26;
   const dry = smooth(0.6, 0.78, tileFbm(u, v, 4, 4, 3, 37));
-  let r = 84 + (g - 0.5) * 24 + clump * 0.5;
-  let gg = 134 + (g - 0.5) * 34 + clump;
-  let b = 52 + (g - 0.5) * 14 + clump * 0.3;
+  let r = 112 + (g - 0.5) * 26 + clump * 0.5;
+  let gg = 162 + (g - 0.5) * 34 + clump;
+  let b = 70 + (g - 0.5) * 14 + clump * 0.3;
   r += (150 - r) * dry * 0.5; gg += (152 - gg) * dry * 0.3; b += (70 - b) * dry * 0.4;
   setRgb(rgba, r, gg, b);
 }

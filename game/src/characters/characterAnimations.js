@@ -7,9 +7,10 @@ import { POSE, POSE_SIZE, createPose, standingBodyFrame } from './characterRig.j
 import { createGaitState, poseLocomotion } from './characterLocomotion.js';
 import {
   MELEE_MOVES, MELEE_COMBO, poseAim, poseCarry, poseMelee, poseSeated, poseBoarding, poseGesture,
-  poseSwim, poseLying, poseGetUp,
+  poseSwim, poseGetUp,
 } from './characterActionPoses.js';
 import { WEAPON_SHAPES } from './characterPartShapes.js';
+import { blendSecondsInto } from './characterAnimationRules.js';
 
 /** Per-person animation memory. */
 export function createAnimationState(seed) {
@@ -26,12 +27,6 @@ export function createAnimationState(seed) {
   };
 }
 
-/** Animation modes that own the whole body (anything else is 'foot'). */
-export const ANIM_MODES = ['foot', 'seated', 'boarding', 'unboarding', 'ragdoll', 'lying', 'getUp', 'swim'];
-
-/** How long the cross-fade into each mode lasts. */
-const BLEND_INTO = { foot: 0.22, seated: 0.2, boarding: 0.15, unboarding: 0.12, ragdoll: 0.08, lying: 0.35, getUp: 0.25, swim: 0.35 };
-
 /**
  * Pose one person for this frame: fills body.pose, body.aimDir and body.base (for the on-foot modes),
  * and starts and lands melee moves. `ctx` gives {config, onStrike(character, move), onFootstep(character, side)}.
@@ -42,7 +37,7 @@ export function animateCharacter(character, body, dt, ctx) {
   if (mode !== anim.mode) {
     anim.snapshot.set(body.pose);
     anim.blendT = 0;
-    anim.blendDuration = BLEND_INTO[mode] || 0.2;
+    anim.blendDuration = blendSecondsInto(mode);
     anim.mode = mode;
     anim.modeTime = 0;
   }
@@ -78,13 +73,12 @@ export function animateCharacter(character, body, dt, ctx) {
     if (character.alive === false) slumpInSeat(target);
   } else if (mode === 'boarding' || mode === 'unboarding') {
     const boarding = body.boarding;
-    const u = boarding ? boarding.u : 1;
-    poseSeated(_seated, rig, character.seat === 0, 0, body.wheel, 0, 0, 0);
+    const u = boarding ? boarding.poseU : 1;
+    poseSeated(_seated, rig, (boarding ? boarding.seat : character.seat) === 0, 0, body.wheel, 0, 0, 0);
     standingPose(_standing, body, rig, dt, ctx);
-    poseBoarding(target, rig, mode === 'boarding' ? u : 1 - u, boarding ? boarding.doorSide : 1, _standing, _seated);
-  } else if (mode === 'ragdoll') {
-    target.set(body.ragdollPose);
-  } else if (mode === 'lying') {
+    poseBoarding(target, rig, u, boarding ? boarding.doorSide : 1, _standing, _seated);
+  } else if (mode === 'ragdoll' || mode === 'lying') {
+    standingBodyFrame(body.base, character.pos.x, character.pos.y, character.pos.z, character.heading);
     target.set(body.ragdollPose);
   } else if (mode === 'getUp') {
     standingBodyFrame(body.base, character.pos.x, character.pos.y, character.pos.z, character.heading);
@@ -197,7 +191,8 @@ function poseOnFoot(character, body, target, dt, ctx) {
   if (anim.aimW > 0.01) {
     _layer.set(target);
     const yaw = wrapAngle((intent.aimYaw || 0) - character.heading);
-    poseAim(_layer, rig, weaponClass, clamp(yaw, -1.2, 1.2), clamp(intent.aimPitch || 0, -1.0, 1.0), anim.kick, fx);
+    const still = clamp(1 - anim.gait.speed / 0.8, 0, 1) * (1 - anim.gait.stride * 0.8);
+    poseAim(_layer, rig, weaponClass, clamp(yaw, -1.2, 1.2), clamp(intent.aimPitch || 0, -1.0, 1.0), anim.kick, fx, still);
     mixInto(target, _layer, anim.aimW);
   }
   if (anim.meleeMove) {

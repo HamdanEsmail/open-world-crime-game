@@ -7,7 +7,7 @@ import * as THREE from 'three';
 /**
  * Create the glow batch and add it to game.scene.
  *   add({x, y, z, color, size, intensity?, entity?, offset?, flicker?, nightOnly?}) -> glow
- *   addBatch(list) -> glow[]      remove(glow)      refresh(glow) after changing its fields
+ *   addBatch(list) -> glow[]      remove(glow)      removeFor(entity)      refresh(glow) after changing its fields
  * An entity glow follows entity.pos and entity.heading; `offset` {x, y, z} is in the entity's own space
  * (+Z forward, +X left). `flicker` 0..1 makes it waver like a dying tube or a flame; `nightOnly` lamps
  * fade out by day.
@@ -100,6 +100,12 @@ export function createLightGlows(game, options = {}) {
     glow.slot = -1;
   }
 
+  /** Take away every glow that rides on `entity` (a despawned car's headlights and siren). */
+  function removeFor(entity) {
+    if (!entity) return;
+    for (let i = moving.length - 1; i >= 0; i -= 1) if (moving[i].entity === entity) remove(moving[i]);
+  }
+
   /** Write a glow again after changing its colour, size, intensity, position or visibility. */
   function refresh(glow) {
     if (glow && glow.slot >= 0) writeGlow(glow);
@@ -189,7 +195,7 @@ export function createLightGlows(game, options = {}) {
   }
 
   return {
-    add, addBatch, remove, refresh, update, mesh,
+    add, addBatch, remove, removeFor, refresh, update, mesh,
     get count() { return moving.length + fixed.length; },
   };
 }
@@ -234,7 +240,7 @@ varying vec3 vColor;
 void main() {
   vec4 mvPosition = modelViewMatrix * vec4(iPosSize.xyz, 1.0);
   float dist = -mvPosition.z;
-  float nightGate = mix(1.0, smoothstep(0.15, 0.75, uNight), iParams.y);
+  float nightGate = iParams.y > 0.5 ? smoothstep(0.15, 0.75, uNight) : mix(0.55, 1.0, uNight);
   float flicker = 1.0;
   if (iParams.x > 0.0) {
     float t = uTime * 13.0 + iParams.z * 37.0;
@@ -252,8 +258,11 @@ void main() {
   float grow = 1.0 + clamp(dist / 160.0, 0.0, 2.5) * 0.55;
   float pulse = 1.0 + 0.07 * sin(uTime * 1.9 + iParams.z * 6.2831 + dist * 0.03) * smoothstep(60.0, 320.0, dist);
   float size = max(iPosSize.w * grow * pulse * mix(0.8, 1.0, uNight), dist * uPixelScale * 3.0);
-  mvPosition.z += min(iPosSize.w * 0.5, dist * 0.5);
-  mvPosition.xy += position.xy * size;
+  // Pull the sprite toward the camera, keeping its size on screen, so a lamp's own head or a wall
+  // just behind it does not cut the halo.
+  float keep = (dist - min(size * 0.5, dist * 0.5)) / dist;
+  mvPosition.xyz *= keep;
+  mvPosition.xy += position.xy * size * keep;
   gl_Position = projectionMatrix * mvPosition;
   vUv = position.xy * 2.0;
   vColor = iColor.rgb * strength;
@@ -270,12 +279,12 @@ void main() {
   float r2 = dot(vUv, vUv);
   if (r2 > 1.0) discard;
   float core = exp(-r2 * 34.0);
-  float halo = exp(-r2 * 7.0) * 0.5 + exp(-r2 * 2.4) * 0.14;
+  float halo = exp(-r2 * 8.0) * 0.55 + exp(-r2 * 3.6) * 0.1;
   float flare = exp(-abs(vUv.y) * 28.0) * (1.0 - abs(vUv.x)) * 0.22;
   float peak = max(vColor.r, max(vColor.g, vColor.b));
   vec3 hot = mix(vColor, vec3(peak), 0.75);
   vec3 col = vColor * (halo + flare) + hot * core * 1.3;
-  col *= 1.0 - smoothstep(0.65, 1.0, r2);
+  col *= 1.0 - smoothstep(0.35, 1.0, r2);
   #ifdef USE_FOG
     #ifdef FOG_EXP2
       float fogAmount = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);

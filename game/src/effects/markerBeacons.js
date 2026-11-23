@@ -3,6 +3,7 @@
 // running out across it and a slowly turning diamond above it. Every marker with `beacon: true` gets
 // one; all of them are drawn by a single instanced mesh and stay readable from 300 m away.
 import * as THREE from 'three';
+import { beaconWidthAtDistance } from './effectRules.js';
 
 /**
  * Create the beacon batch and add it to game.scene. It follows game.markers.list by itself.
@@ -13,8 +14,10 @@ export function createMarkerBeacons(game, options = {}) {
   const geometry = buildBeaconGeometry();
   const baseAttr = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4).setUsage(THREE.DynamicDrawUsage);
   const colorAttr = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4).setUsage(THREE.DynamicDrawUsage);
+  const columnAttr = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(THREE.DynamicDrawUsage);
   geometry.setAttribute('iBase', baseAttr);
   geometry.setAttribute('iColor', colorAttr);
+  geometry.setAttribute('iColumn', columnAttr);
   geometry.instanceCount = 0;
 
   const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]);
@@ -69,10 +72,14 @@ export function createMarkerBeacons(game, options = {}) {
         else if (Number.isFinite(pos.y) && pos.y > y + 0.5) y = pos.y;
         const o = count * 4;
         const base = baseAttr.array;
+        const radius = marker.radius || 3;
         base[o] = x;
         base[o + 1] = y;
         base[o + 2] = z;
-        base[o + 3] = marker.radius || 3;
+        base[o + 3] = radius;
+        const eye = camera.position;
+        const distance = Math.hypot(x - eye.x, y - eye.y, z - eye.z);
+        columnAttr.array[count] = beaconWidthAtDistance(distance, radius, uniforms.uPixelScale.value);
         color.set(marker.color === undefined ? 0xffd24a : marker.color);
         const c = colorAttr.array;
         c[o] = color.r;
@@ -85,6 +92,7 @@ export function createMarkerBeacons(game, options = {}) {
     if (count > 0 || shown > 0) {
       markRange(baseAttr, count * 4);
       markRange(colorAttr, count * 4);
+      markRange(columnAttr, count);
     }
     shown = count;
     geometry.instanceCount = count;
@@ -183,6 +191,7 @@ attribute vec3 beaconNormal;
 attribute float part;
 attribute vec4 iBase;
 attribute vec4 iColor;
+attribute float iColumn;
 uniform float uTime;
 uniform float uPixelScale;
 uniform float uColumnHeight;
@@ -208,8 +217,7 @@ void main() {
   vHeight = 0.0;
   vRadial = length(p.xz);
   if (part < 0.5) {
-    float columnRadius = max(clamp(radius * 0.3, 0.7, 2.0), dist * uPixelScale * 4.0);
-    world = base + vec3(p.x * columnRadius, p.y * uColumnHeight, p.z * columnRadius);
+    world = base + vec3(p.x * iColumn, p.y * uColumnHeight, p.z * iColumn);
     vHeight = p.y;
   } else if (part < 1.5) {
     float ringRadius = radius * (1.0 + 0.035 * sin(t * 3.0));

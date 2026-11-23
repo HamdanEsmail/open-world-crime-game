@@ -2,19 +2,16 @@
 // galloping bass, distorted power chords, a gritty lead riff, tom fills that tumble into each new
 // phrase, snare rolls that build into the drop, all written fresh for every song.
 import {
-  SCALES, scaleChord, scaleNote, makeMotif, varyMotif, motifBar, buildForm, sectionAt, setTempo, nameSong,
+  SCALES, scaleChord, scaleNote, makeMotif, varyMotif, motifBar, buildForm, sectionAt, setTempo, nameSong, fitRegister,
 } from './musicSequencer.js';
+import { RADIO_STATION_GUIDE } from './radioAndSoundGuide.js';
 
-/** The station and its composer. */
+/** The station (its name, host and tagline come from the guide) and its composer. */
 export const DUNE_FM = {
-  id: 'dune_fm',
-  name: 'Dune FM 101.1',
-  frequency: '101.1 FM',
-  host: 'Rafe "Sidewinder" Malouf',
-  tagline: 'Loud enough to hear over the khamsin.',
+  ...RADIO_STATION_GUIDE.find((s) => s.id === 'dune_fm'),
   color: '#e4572e',
   kind: 'music',
-  mix: { level: 0.9, drums: 0.9, bass: 0.85, keys: 0.55, lead: 0.5, fx: 0.5, reverb: 0.12, delay: 0.12, delaySteps: 4, tone: 13000 },
+  mix: { level: 0.17, drums: 0.9, bass: 0.85, keys: 0.55, lead: 0.5, fx: 0.5, reverb: 0.12, delay: 0.12, delaySteps: 4, tone: 13000 },
   makeSong,
   composeBar,
 };
@@ -64,7 +61,7 @@ function composeBar(song, bar, rng) {
   const degree = progression[sec.barIn % progression.length];
   const nextDegree = progression[(sec.barIn + 1) % progression.length];
   const chord = scaleChord(song.root, song.scale, degree, 3);
-  const root = chord[0];
+  const root = fitRegister(chord[0], 33, 45);
   const fifth = root + 7;
   const s = song.sounds;
   const ev = [];
@@ -85,10 +82,17 @@ function composeBar(song, bar, rng) {
     if (!sec.sectionEnd) for (let st = 0; st < 16; st += 4) ev.push({ step: st, inst: 'kick', vel: 0.9 });
     if (sec.barIn === 0) ev.push({ step: 0, inst: 'riser', len: sec.bars * 16, vel: 1 });
   } else {
+    // The drummer never plays the same bar twice: a pushed kick, ghost notes, a hat left open.
     for (const st of song.kickPattern) ev.push({ step: st, inst: 'kick', vel: st === 0 ? 1 : 0.85 });
+    if (rng.chance(0.35)) ev.push({ step: rng.pick([3, 7, 13, 15]), inst: 'kick', vel: 0.6 });
     ev.push({ step: 4, inst: 'snare', vel: 0.9 });
     ev.push({ step: 12, inst: 'snare', vel: 0.95 });
-    for (let st = 0; st < 16; st += 2) ev.push({ step: st, inst: chorus ? 'ride' : 'hat', vel: st % 4 === 0 ? 0.6 : 0.42 });
+    if (rng.chance(0.4)) ev.push({ step: rng.pick([7, 9, 10, 15]), inst: 'snare', vel: 0.25 });
+    const openAt = rng.chance(0.3) ? rng.pick([6, 14]) : -1;
+    for (let st = 0; st < 16; st += 2) {
+      if (st === openAt) ev.push({ step: st, inst: 'openHat', vel: 0.45 });
+      else ev.push({ step: st, inst: chorus ? 'ride' : 'hat', vel: (st % 4 === 0 ? 0.6 : 0.42) + rng.next() * 0.08 });
+    }
   }
   if (sec.barIn === 0 && name !== 'intro' && name !== 'build') ev.push({ step: 0, inst: 'crash', vel: 0.8 });
   else if (chorus && sec.barIn % 4 === 0) ev.push({ step: 0, inst: 'crash', vel: 0.55 });
@@ -104,7 +108,7 @@ function composeBar(song, bar, rng) {
       ev.push({ step: 8, inst: 'bass', midi: root, len: 4, vel: 0.7, p: s.bass });
     } else {
       const walk = sec.phraseEnd && nextDegree !== degree;
-      const nextRoot = scaleNote(song.root, song.scale, nextDegree);
+      const nextRoot = fitRegister(scaleNote(song.root, song.scale, nextDegree), 33, 45);
       for (const st of song.gallop) {
         if (walk && st >= 12) {
           ev.push({ step: st, inst: 'bass', midi: root + Math.round(((nextRoot - root) * (st - 11)) / 5), len: 1, vel: 0.85, p: s.bass });
@@ -127,7 +131,8 @@ function composeBar(song, bar, rng) {
   } else if (name === 'verse' && sec.barIn >= 4) {
     ev.push({ step: 0, inst: 'powerChord', notes: power, len: 15, vel: 0.65, p: s.power });
   } else if (name === 'verse') {
-    for (const st of [0, 3, 6]) ev.push({ step: st, inst: 'powerChord', notes: power, len: 0.6, vel: 0.55, p: s.power });
+    const chugs = rng.pick([[0, 3, 6], [0, 3, 6, 10], [0, 2, 3, 6], [0, 6, 8, 11]]);
+    for (const st of chugs) ev.push({ step: st, inst: 'powerChord', notes: power, len: 0.6, vel: 0.5 + rng.next() * 0.1, p: s.power });
   }
 
   // Lead: the riff and its answer in the choruses, call-and-response in the verses, a dark pad in the break.
@@ -137,10 +142,10 @@ function composeBar(song, bar, rng) {
   } else if (name === 'verse' && sec.barIn % 4 >= 2) {
     motifBar(ev, song.riffAnswer, sec.barIn % 2, song, degree, 24, 'lead', s.lead, 0.55, true);
   } else if (name === 'intro' && sec.barIn >= 2) {
-    motifBar(ev, song.riff, sec.barIn % 2, song, degree, 12, 'lead', s.lead, 0.45, true);
+    motifBar(ev, song.riff, sec.barIn % 2, song, degree, 24, 'lead', s.lead, 0.4, true);
   }
   if (half || name === 'outro') {
-    ev.push({ step: 0, inst: 'pad', notes: [root + 12, fifth + 12, chord[1] + 24], len: 16, vel: 0.9, p: s.pad });
+    ev.push({ step: 0, inst: 'pad', notes: [root + 12, fifth + 12, fitRegister(chord[1], 57, 68)], len: 16, vel: 0.9, p: s.pad });
   }
   return ev;
 }

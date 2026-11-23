@@ -4,26 +4,13 @@
 // traction circle that drive, braking and cornering share, and weight that moves between the wheels
 // as the car brakes, accelerates and leans. Below walking pace it blends into a kinematic model, so
 // a parked car never jitters.
-import { TYRE_SHAPE } from './vehicleHandlingProfile.js';
+import {
+  tyreForceShare, steeringLockAtSpeed, brakeOrReverse, handbrakeRearGrip, BURST_GRIP, BURST_TOP_SPEED, BURST_DRAG, BURST_PULL,
+} from './drivingRules.js';
 import { engineDriveForce, engineBrakingForce, updateGearbox } from './vehicleDrivetrain.js';
 import {
   sampleWheelGround, computeSuspensionLoads, stepBodyAttitude, updateWaterImmersion, writeWheelSuspension,
 } from './vehicleSuspension.js';
-
-const TAU = Math.PI * 2;
-/** Slip angles are measured against at least this speed, so a crawling tyre never over-reacts. */
-const SLIP_SPEED_FLOOR = 3.5;
-/** Share of its grip a tyre loses once it is pushed beyond the traction circle and slides. */
-const SLIDE_GRIP_DROP = 0.2;
-/** Grip of a locked wheel (handbrake, wreck, parked car), as a share of its peak. */
-const LOCKED_GRIP = 0.72;
-/** Forward speeds (m/s) over which the chassis hands over from the kinematic to the tyre model. */
-const KINEMATIC_LOW = 1.2;
-const KINEMATIC_HIGH = 3.5;
-/** Below this speed, with no throttle, a car simply stands still. */
-const HOLD_SPEED = 0.35;
-/** How quickly (per second) the drift stabiliser matches the body's rotation to its path. */
-const SPIN_GUARD = 25;
 
 /**
  * Advance one vehicle by `dt` seconds (about 1/120).
@@ -41,6 +28,7 @@ export function stepVehicleDynamics(vehicle, dt, world) {
   const vel = vehicle.vel;
   const pos = vehicle.pos;
   if (dyn.spinFreedom > 0) dyn.spinFreedom -= dt;
+  readTuningAndTyres(vehicle, dyn);
 
   let sinH = Math.sin(vehicle.heading);
   let cosH = Math.cos(vehicle.heading);
@@ -65,7 +53,7 @@ export function stepVehicleDynamics(vehicle, dt, world) {
   let brake = locked ? 0 : clamp01(controls.brake);
   const handbrake = !locked && !!controls.handbrake;
   const reverse = !!controls.reverse;
-  if (reverse && throttle > 0 && forward > 1.5) {
+  if (reverse && throttle > 0 && brakeOrReverse(forward) === 'brake') {
     // Reverse only engages once the car has nearly stopped; until then the pedal brakes.
     if (throttle > brake) brake = throttle;
     throttle = 0;
@@ -126,7 +114,7 @@ export function stepVehicleDynamics(vehicle, dt, world) {
     let sensitivity = 1 - profile.loadSensitivity * (loadRatio - 1);
     if (sensitivity < 0.75) sensitivity = 0.75;
     else if (sensitivity > 1.12) sensitivity = 1.12;
-    const grip = profile.grip * (front ? 1 : profile.rearGrip) * dyn.surfaceGrip[i] * sensitivity * load;
+    const grip = profile.grip * dyn.gripScale * (front ? 1 : profile.rearGrip) * dyn.surfaceGrip[i] * sensitivity * load;
 
     let longForce;
     let latForce;
@@ -135,7 +123,7 @@ export function stepVehicleDynamics(vehicle, dt, world) {
     if (wheelLocked) {
       // A locked tyre slides: friction straight against the way its contact patch is moving.
       const slide = Math.sqrt(along * along + across * across);
-      let k = (grip * LOCKED_GRIP) / (slide > 1 ? slide : 1);
+      let k = handbrakeRearGrip(grip) / (slide > 1 ? slide : 1);
       const kMax = quarterMass / dt;
       if (k > kMax) k = kMax;
       longForce = -along * k;
@@ -145,7 +133,7 @@ export function stepVehicleDynamics(vehicle, dt, world) {
     } else {
       const stiffness = (front ? profile.tyreStiffnessFront : profile.tyreStiffnessRear) * dyn.surfaceStiffness[i];
       const slipAngle = Math.atan2(across, Math.max(Math.abs(along), SLIP_SPEED_FLOOR));
-      latForce = -grip * Math.sin(TYRE_SHAPE * Math.atan(stiffness * slipAngle));
+      latForce = -grip * tyreForceShare(slipAngle, stiffness);
       let driveForce = drive * driveShare;
       if (driveForce !== 0) {
         const budget = grip * tractionLimit;
@@ -159,7 +147,8 @@ export function stepVehicleDynamics(vehicle, dt, world) {
       // resist the rolling; none of them can push a stopped wheel backwards.
       let brakeForce = brakeTotal * (front ? profile.brakeFront : 1 - profile.brakeFront) * 0.5;
       if (brakeForce > grip * 0.92) brakeForce = grip * 0.92;
-      let resist = brakeForce + profile.rollingResistance * load + engineBrake * driveShare + dyn.sandDrag[i] * quarterMass;
+      let resist = brakeForce + profile.rollingResistance * load + engineBrake * driveShare
+        + (dyn.sandDrag[i] + (dyn.tyresBurst ? BURST_DRAG : 0)) * quarterMass;
       const stopLimit = (quarterMass * Math.abs(along)) / dt;
       if (resist > stopLimit) resist = stopLimit;
       longForce = driveForce - (along > 0 ? resist : along < 0 ? -resist : 0);
@@ -293,10 +282,10 @@ function steerFrontWheels(vehicle, profile, dyn, controls, locked, handbrake, fo
   const returning = Math.abs(target) < Math.abs(dyn.steer) || target * dyn.steer < 0;
   const rate = (returning ? profile.steerReturnRate : profile.steerRate) * slowdown;
   dyn.steer = approach(dyn.steer, target, rate * dt);
-  const speedSq = forward * forward > 1 ? forward * forward : 1;
-  let lock = Math.atan((profile.wheelbase * profile.grip * 9.81 * 1.1) / speedSq) + profile.peakSlip * 1.15;
-  if (lock > profile.maxSteer) lock = profile.maxSteer;
+  const lock = steeringLockAtSpeed(speedAbs, profile.wheelbase, profile.grip * dyn.gripScale, profile.peakSlip, profile.maxSteer);
   let angle = -dyn.steer * lock;
+  // A burst tyre drags the car toward its side.
+  if (dyn.tyresBurst) angle += ((vehicle.id & 1) === 0 ? BURST_PULL : -BURST_PULL) * smoothstep(2, 10, speedAbs);
   if (forward > 1.5 && touching > 0 && !locked) {
     const beta = Math.atan2(lateral, forward);
     // With the tail already out, steering further into the bend has less bite: a keyboard driver
@@ -306,6 +295,19 @@ function steerFrontWheels(vehicle, profile, dyn, controls, locked, handbrake, fo
     angle += clamp(beta, -0.7, 0.7) * help;
   }
   dyn.steerAngle = clamp(angle, -profile.maxSteer, profile.maxSteer);
+}
+
+/**
+ * Garage upgrades (vehicle.tune = {power, grip, topSpeed}, each a multiplier, 1 when absent) and
+ * tyres burst on a police spike strip (vehicle.tags.tyresBurst): grip, top speed, drag and pull.
+ */
+function readTuningAndTyres(vehicle, dyn) {
+  const tune = vehicle.tune;
+  const burst = !!(vehicle.tags && vehicle.tags.tyresBurst === true);
+  dyn.tyresBurst = burst;
+  dyn.powerScale = tune && tune.power > 0 ? tune.power : 1;
+  dyn.speedScale = (tune && tune.topSpeed > 0 ? tune.topSpeed : 1) * (burst ? BURST_TOP_SPEED : 1);
+  dyn.gripScale = (tune && tune.grip > 0 ? tune.grip : 1) * (burst ? BURST_GRIP : 1);
 }
 
 /**
@@ -386,3 +388,16 @@ function smoothstep(edge0, edge1, value) {
   const t = clamp01((value - edge0) / (edge1 - edge0));
   return t * t * (3 - 2 * t);
 }
+
+const TAU = Math.PI * 2;
+/** Slip angles are measured against at least this speed, so a crawling tyre never over-reacts. */
+const SLIP_SPEED_FLOOR = 3.5;
+/** Share of its grip a tyre loses once it is pushed beyond the traction circle and slides. */
+const SLIDE_GRIP_DROP = 0.2;
+/** Forward speeds (m/s) over which the chassis hands over from the kinematic to the tyre model. */
+const KINEMATIC_LOW = 1.2;
+const KINEMATIC_HIGH = 3.5;
+/** Below this speed, with no throttle, a car simply stands still. */
+const HOLD_SPEED = 0.35;
+/** How quickly (per second) the drift stabiliser matches the body's rotation to its path. */
+const SPIN_GUARD = 25;

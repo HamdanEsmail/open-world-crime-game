@@ -1,10 +1,10 @@
-// The car under the player's hands: a layered engine note that follows rpm, throttle, gear and the
-// model's character (a supercar's high wail, a sports car's rasp, a classic's burbling V8, a truck's
-// diesel rumble, a buggy's buzzing two-stroke), tyre screech from wheel slip and a softer hiss on sand,
-// rolling roar and wind at speed, the horn while it is held, and the faint, Doppler-bent engines of the
-// two or three nearest cars going by.
+// The car under the player's hands: a layered engine note following rpm, throttle and gear in the
+// model's own voice (a supercar's wail, a sports car's rasp, a classic's burbling V8, a truck's diesel,
+// a buggy's two-stroke), tyre screech and sand hiss from slip, wind at speed, the horn, and the faint,
+// Doppler-bent engines of the nearest cars going by.
 import { getPulseWave, makeDrive, startNoiseLoop } from './synthPrimitives.js';
 import { playSoundRecipe, startHornVoice } from './soundEffects.js';
+import { engineTimbreForVehicleClass, isDieselClass } from './radioAndSoundGuide.js';
 
 /**
  * Follow the player's vehicle: build its engine rig on entering, play the start-up and shut-down,
@@ -18,18 +18,28 @@ export function createPlayerCarSound(engine, game) {
   let horn = null;
   let lastThrottle = 0;
   let exitedFrom = null;
+  let announced = null;
+  let announcedAt = -10;
   const spot = { gain: 1, pan: 0, cutoff: 20000, distance: 0 };
   const state = { rpm: 0, throttle: 0, speed: 0, gear: 1, slip: 0, surface: 'road', health: 1, time: 0, running: true, airborne: false };
 
-  /** The player got in: door shuts, the starter cranks, the engine catches. */
+  /**
+   * The player got in: door shuts, the starter cranks, the engine catches. Called by the event and by
+   * the frame check, whichever comes first; the second call for the same car is ignored.
+   */
   function vehicleEntered(vehicle) {
-    if (!engine.isLive() || !vehicle || rigVehicle === vehicle) return;
+    if (!engine.isLive() || !vehicle) return;
     const t = engine.ctx.currentTime;
     const className = vehicle.spec?.className;
     exitedFrom = null;
-    playAt('doorClose', t, vehicle, null);
-    if (!vehicle.wrecked) playAt('engineStart', t + 0.12, vehicle, { className });
-    attach(vehicle, t + (isHeavy(className) ? 0.85 : 0.65));
+    const delay = isDieselClass(className) ? 0.85 : 0.65;
+    if (!(announced === vehicle && t - announcedAt < 3)) {
+      announced = vehicle;
+      announcedAt = t;
+      playAt('doorClose', t, vehicle, null);
+      if (!vehicle.wrecked) playAt('engineStart', t + 0.12, vehicle, { className });
+    }
+    if (rigVehicle !== vehicle) attach(vehicle, Math.max(t, announcedAt + delay));
   }
 
   /** The player got out: the engine dies away and the door opens. */
@@ -40,6 +50,7 @@ export function createPlayerCarSound(engine, game) {
     playAt('doorOpen', t + 0.05, vehicle, null);
     detach(t);
     exitedFrom = vehicle;
+    announced = null;
   }
 
   function playAt(id, t, vehicle, params) {
@@ -74,12 +85,14 @@ export function createPlayerCarSound(engine, game) {
     if (exitedFrom && vehicle === exitedFrom) vehicle = null;
     else if (vehicle !== exitedFrom) exitedFrom = null;
     const t = engine.ctx.currentTime;
+    // The entry event can arrive a moment before the player system seats the player: keep the rig.
+    if (!vehicle && rigVehicle && announced === rigVehicle && t - announcedAt < 1.5) vehicle = rigVehicle;
     if (vehicle !== rigVehicle) {
       if (!vehicle) detach(t);
       else vehicleEntered(vehicle);
     }
     if (!rig || !vehicle) return;
-    const controls = vehicle.controls || {};
+    const controls = vehicle.controls || NO_CONTROLS;
     state.rpm = finite(vehicle.rpm, 0);
     state.throttle = vehicle.wrecked ? 0 : finite(controls.throttle, 0);
     state.speed = Math.abs(finite(vehicle.speed, 0));
@@ -210,12 +223,13 @@ export const ENGINE_PROFILES = {
   buggy: { idle: 1500, redline: 9500, cylinders: 2, twoStroke: true, saw: 0.3, pulse: 0.65, duty: 0.08, sub: 0.1, intake: 0.28, drive: 4.5, cutIdle: 900, cutOpen: 5200, q: 3.5, detune: 18, wobble: 0.25, burble: 0.1, level: 0.68 },
   police: { idle: 750, redline: 6500, cylinders: 8, saw: 0.5, pulse: 0.45, duty: 0.3, sub: 0.45, intake: 0.2, drive: 2.8, cutIdle: 380, cutOpen: 3600, q: 2.6, detune: 10, wobble: 0.12, burble: 0.35, level: 0.9 },
 };
-ENGINE_PROFILES.taxi = ENGINE_PROFILES.sedan;
-ENGINE_PROFILES.policeSuv = ENGINE_PROFILES.police;
 
-/** The engine profile for a vehicle class, a sedan's when the class is unknown. */
+/** The saturated engine layers run hot; this sets the whole note under the effects. */
+const ENGINE_TRIM = 0.2;
+
+/** The engine profile for a vehicle class (by the guide's engine voice), a sedan's when unknown. */
 export function engineProfileFor(className) {
-  return ENGINE_PROFILES[className] || ENGINE_PROFILES.sedan;
+  return ENGINE_PROFILES[engineTimbreForVehicleClass(className)] || ENGINE_PROFILES.sedan;
 }
 
 /**
@@ -345,7 +359,7 @@ export function createCarSoundRig(ctx, destination, className) {
   connectWithGain(ctx, white.connect(bandB), screech, 0.7, node);
   const squeal = source(ctx.createOscillator());
   squeal.type = 'triangle';
-  connectWithGain(ctx, squeal, screech, 0.05, node);
+  connectWithGain(ctx, squeal, screech, 0.08, node);
   const rollFilter = node(ctx.createBiquadFilter());
   rollFilter.type = 'lowpass';
   const roll = node(ctx.createGain());
@@ -386,7 +400,7 @@ export function createCarSoundRig(ctx, destination, className) {
     lastGear = s.gear;
     const sinceShift = when - shiftTime;
     const shiftDip = sinceShift >= 0 && sinceShift < 0.3 ? 1 - 0.55 * Math.exp(-sinceShift / 0.08) : 1;
-    let level = p.level * (0.3 + 0.3 * rpm + 0.4 * throttle) * shiftDip;
+    let level = ENGINE_TRIM * p.level * (0.3 + 0.3 * rpm + 0.4 * throttle) * shiftDip;
     if (rpm > 0.97 && throttle > 0.7 && Math.floor(when * 16) % 2 === 0) level *= 0.5;
     if (s.health !== undefined && s.health < 0.3 && when > misfireUntil && Math.random() < (0.3 - s.health) * 0.15) misfireUntil = when + 0.06;
     if (when < misfireUntil) level *= 0.25;
@@ -416,7 +430,7 @@ export function createCarSoundRig(ctx, destination, className) {
     bandA.frequency.setTargetAtTime(screechFreq, when, 0.03);
     bandB.frequency.setTargetAtTime(screechFreq * 1.7, when, 0.03);
     squeal.frequency.setTargetAtTime(screechFreq * 0.97, when, 0.02);
-    screech.gain.setTargetAtTime(onSand || airborne ? 0 : slide * 0.3 * (0.85 + Math.random() * 0.3), when, 0.03);
+    screech.gain.setTargetAtTime(onSand || airborne ? 0 : slide * 0.6 * (0.85 + Math.random() * 0.3), when, 0.03);
     rollFilter.frequency.setTargetAtTime(180 + speed * 12, when, 0.1);
     roll.gain.setTargetAtTime(airborne ? 0 : Math.pow(clamp01(speed / 45), 1.3) * (onSand ? 0.08 : 0.24), when, 0.08);
     sand.gain.setTargetAtTime(onSand && !airborne ? clamp01(speed / 30) * 0.16 + slide * 0.22 : 0, when, 0.08);
@@ -510,6 +524,8 @@ export function dopplerFactor(listener, vehicle) {
   return Math.max(0.7, Math.min(1.4, factor));
 }
 
+const NO_CONTROLS = Object.freeze({ throttle: 0, horn: false });
+
 function firingPerRev(profile) {
   return profile.twoStroke ? profile.cylinders : profile.cylinders / 2;
 }
@@ -519,10 +535,6 @@ function connectWithGain(ctx, from, to, amount, register) {
   g.gain.value = amount;
   from.connect(g).connect(to);
   return g;
-}
-
-function isHeavy(className) {
-  return className === 'truck' || className === 'bus' || className === 'armored';
 }
 
 function finite(value, fallback) {

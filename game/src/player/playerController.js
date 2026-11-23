@@ -2,7 +2,7 @@
 // shooting on foot, and into throttle, brake, steering and handbrake behind the wheel; steals and
 // leaves vehicles; and handles being knocked out or arrested. Becomes game.player.
 import * as THREE from 'three';
-import { findVehicleToEnter, enterOrStealVehicle, leaveVehicle } from './vehicleEntry.js';
+import { findVehicleToEnter, enterOrStealVehicle, takeTheWheel, leaveVehicle } from './vehicleEntry.js';
 
 /** Build the player controller. Call spawn() once the world and the character system exist. */
 export function createPlayerController(game) {
@@ -14,6 +14,9 @@ export function createPlayerController(game) {
     vehicle: null,
     /** 'onFoot' | 'driving' | 'down' (knocked out or arrested, waiting to respawn) */
     state: 'onFoot',
+    /** The vehicle the player is running to and climbing into, until seated. */
+    entering: null,
+    enteringSince: 0,
     /** Where the player is: the vehicle when driving, the character otherwise. */
     get pos() {
       return player.vehicle ? player.vehicle.pos : player.character ? player.character.pos : ORIGIN;
@@ -40,9 +43,13 @@ export function createPlayerController(game) {
   let downCause = '';
   let sirenLatch = false;
 
+  game.events.on('character:enteredVehicle', (event) => {
+    if (event.character === player.character && player.entering === event.vehicle && event.seat === 0) takeTheWheel(game, player, event.vehicle);
+  });
+
   /** Create the player's character at a place. */
   function spawn(x, z, heading = 0) {
-    const look = game.characters.randomLook('player');
+    const look = game.characters.castLook ? game.characters.castLook('zayd') : game.characters.randomLook('player');
     player.character = game.characters.spawn({ kind: 'player', faction: 'player', archetype: 'player', name: 'Zayd', x, z, heading, look, health: game.config.player.maxHealth });
     player.character.maxHealth = game.config.player.maxHealth;
     player.vehicle = null;
@@ -57,6 +64,7 @@ export function createPlayerController(game) {
   /** Move the player (out of any vehicle) to a point. */
   function teleport(x, z, heading = 0) {
     if (player.vehicle) leaveVehicle(game, player, { instant: true });
+    player.entering = null;
     const character = player.character;
     character.pos.set(x, game.terrain ? game.terrain.heightAt(x, z) : 0, z);
     character.vel.set(0, 0, 0);
@@ -85,6 +93,10 @@ export function createPlayerController(game) {
       knockOut();
       return;
     }
+    if (player.entering) {
+      updateEntering();
+      return;
+    }
     if (game.mode !== 'playing') {
       idleControls();
       return;
@@ -92,6 +104,30 @@ export function createPlayerController(game) {
     if (player.vehicle) updateDriving(dt);
     else updateOnFoot(dt);
     regenerate(dt);
+  }
+
+  /** Running to the door and climbing in: the controls wait until the player is in the seat. */
+  function updateEntering() {
+    const character = player.character;
+    const vehicle = player.entering;
+    const intent = character.intent;
+    intent.moveX = 0;
+    intent.moveZ = 0;
+    intent.fire = false;
+    intent.aim = false;
+    intent.jump = false;
+    const elapsed = game.time.elapsed - player.enteringSince;
+    if (character.vehicle === vehicle && character.state === 'driving') {
+      takeTheWheel(game, player, vehicle);
+    } else if (vehicle.wrecked || elapsed > 7 || (elapsed > 0.6 && character.vehicle !== vehicle && character.state !== 'enterVehicle')) {
+      // The car drove off, blew up, or the door could not be reached.
+      player.entering = null;
+      vehicle.controls.handbrake = false;
+      vehicle.controls.brake = 0;
+    } else if (!vehicle.driver || vehicle.driver === character) {
+      vehicle.controls.throttle = 0;
+      vehicle.controls.brake = 1;
+    }
   }
 
   /** Walking, sprinting, jumping, aiming, shooting, and looking for a car to take. */
@@ -171,7 +207,6 @@ export function createPlayerController(game) {
       controls.siren = false;
     }
     if (input.pressed('headlights')) controls.headlights = !controls.headlights;
-    if (input.pressed('nextRadio')) game.audio?.radio?.next?.();
     if (game.cameraRig) game.cameraRig.lookBehind = input.held('lookBehind');
 
     // Shooting from the driver's seat with a one-handed weapon.

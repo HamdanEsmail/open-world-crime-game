@@ -43,12 +43,30 @@ export function createGroundSurfaceMaterials(renderer) {
 function teachSwatchSampling(material) {
   const { size, slot, pad, span, columns } = ATLAS;
   const f = (n) => n.toFixed(6);
+  const sheen = SWATCH_SHEEN.map((s) => f(s)).join(', ');
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float surfaceTile;\nvarying float vSurfaceTile;\nvarying vec2 vSurfaceUv;')
       .replace('#include <uv_vertex>', '#include <uv_vertex>\nvSurfaceTile = surfaceTile;\nvSurfaceUv = uv;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying float vSurfaceTile;\nvarying vec2 vSurfaceUv;')
+      .replace('#include <lights_lambert_pars_fragment>', `#include <lights_lambert_pars_fragment>
+        // A broad forward sheen: asphalt, polished stone and water glow when you look toward a low sun.
+        float groundSheenOf(float tile) {
+          float table[16] = float[16](${sheen});
+          return table[int(clamp(floor(tile + 0.5), 0.0, 15.0))];
+        }
+        void RE_Direct_GroundSheen(const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in LambertMaterial material, inout ReflectedLight reflectedLight) {
+          RE_Direct_Lambert(directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
+          vec3 halfDir = normalize(directLight.direction + geometryViewDir);
+          float dotNH = saturate(dot(geometryNormal, halfDir));
+          float grazing = 1.0 - saturate(dot(geometryNormal, geometryViewDir));
+          float glow = pow(dotNH, 22.0) * (0.35 + 0.65 * grazing * grazing);
+          reflectedLight.directDiffuse += directLight.color * glow * groundSheenOf(vSurfaceTile) * 0.16;
+        }
+        #undef RE_Direct
+        #define RE_Direct RE_Direct_GroundSheen
+      `)
       .replace('#include <map_fragment>', `
         {
           float slotIndex = floor(vSurfaceTile + 0.5);
@@ -69,3 +87,7 @@ function teachSwatchSampling(material) {
   };
   material.customProgramCacheKey = () => 'port-sarab-ground-swatches';
 }
+
+/** How strongly each swatch catches the low sun (asphalt, paint, pavers, kerb, granite, cobbles, earth,
+ *  decking, concrete, lawn, dark stone, sand, tiles, pool, dirt). */
+const SWATCH_SHEEN = [0.55, 0.4, 0.3, 0.16, 0.2, 0.32, 0.12, 0.04, 0.18, 0.14, 0.0, 0.9, 0.14, 0.45, 1.4, 0.06];

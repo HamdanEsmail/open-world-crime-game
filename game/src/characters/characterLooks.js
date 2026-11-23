@@ -2,9 +2,10 @@
 // person in the boomtown, from tourists in loud shirts and suited bankers to robed locals, PSPD
 // officers, the Dune Jackals gang and Zayd "Dust" Karam himself. A look is plain data (it can be
 // saved); characterPaint.js turns it into colours on the body parts.
+import { CHARACTER_ARCHETYPES } from './characterAnimationRules.js';
 
 /** Every archetype randomLook() understands. */
-export const LOOK_ARCHETYPES = ['civilian', 'tourist', 'business', 'worker', 'local', 'officer', 'swat', 'gang', 'crew', 'player'];
+export const LOOK_ARCHETYPES = CHARACTER_ARCHETYPES;
 
 /**
  * A random look for one person of the given archetype.
@@ -186,7 +187,7 @@ const CAST_LOOKS = {
     look.skin = 0xc68e62;
     look.hair = 0x1d1712;
     look.hairStyle = 'short';
-    look.beard = 0x2a2018;
+    look.beard = 0x7a5640;
     look.top = { color: 0xb8925a, colorB: 0xe4572e, pattern: 'rally', sleeves: 'long', sleeveColor: null, sleevePattern: 'rally', cuff: 0x3a2a1e };
     look.bottom = { color: 0x2a2d33, colorB: 0x3a2a1e, belt: true, shorts: false, boots: 0x3a2a1e, socks: null };
     look.shoes = { color: 0x3a2a1e, sole: 0x1a1512, sandals: false };

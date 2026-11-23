@@ -1,24 +1,27 @@
 // The cars, trucks and police units of Port Sarab: fifteen invented models with their own names,
 // handling figures, prices and paint, and where in the city each one turns up in traffic.
 
-const WHITE = 0xf4f1e8;
-const SILVER = 0xb9c0c7;
-const GRAPHITE = 0x3b4048;
-const BLACK = 0x16181c;
-const SAND = 0xd9b77a;
-const TEAL = 0x1ba39c;
-const CORAL = 0xe4572e;
-const WINE = 0x7a1f2b;
-const NAVY = 0x1e3a6e;
-const SKY = 0x4d9de0;
-const SAFFRON = 0xf2a81d;
-const OLIVE = 0x6b7a3a;
-const PEARL = 0xe9e2d0;
-const LIME = 0x9bd13a;
-const VIOLET = 0x6a3fa0;
+/** Every model on Port Sarab's roads. @type {import('../core/gameContext.js').VehicleSpec[]} */
+export const VEHICLE_CATALOG = listPortSarabVehicles();
 
-/** @type {import('../core/gameContext.js').VehicleSpec[]} */
-export const VEHICLE_CATALOG = [
+/** The fifteen vehicles: compact, sedan, taxi, sports, super, classic, SUV, pickup, van, truck, bus, buggy, two police units and the bullion carrier. */
+function listPortSarabVehicles() {
+  const WHITE = 0xf4f1e8;
+  const SILVER = 0xb9c0c7;
+  const GRAPHITE = 0x3b4048;
+  const BLACK = 0x16181c;
+  const SAND = 0xd9b77a;
+  const TEAL = 0x1ba39c;
+  const CORAL = 0xe4572e;
+  const WINE = 0x7a1f2b;
+  const NAVY = 0x1e3a6e;
+  const SKY = 0x4d9de0;
+  const SAFFRON = 0xf2a81d;
+  const OLIVE = 0x6b7a3a;
+  const PEARL = 0xe9e2d0;
+  const LIME = 0x9bd13a;
+  const VIOLET = 0x6a3fa0;
+  return [
   {
     id: 'dromo_sandpiper', name: 'Dromo Sandpiper', className: 'compact',
     mass: 1050, length: 3.9, width: 1.7, height: 1.5, wheelbase: 2.45, track: 1.46, wheelRadius: 0.3,
@@ -139,7 +142,8 @@ export const VEHICLE_CATALOG = [
     colors: [0x2b2f36],
     traffic: {},
   },
-];
+  ];
+}
 
 /** Look a spec up by id. */
 export function vehicleSpecById(id) {

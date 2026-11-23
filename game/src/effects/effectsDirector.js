@@ -11,6 +11,7 @@ import { createExplosionEffects } from './explosionEffects.js';
 import { createBulletTracers } from './bulletTracers.js';
 import { createMarkerBeacons } from './markerBeacons.js';
 import { createVehicleWheelEffects } from './vehicleWheelEffects.js';
+import { explosionShakeAtDistance, explosionFlashAtDistance } from './effectRules.js';
 
 /**
  * Create game.effects and start listening to the game's events.
@@ -89,13 +90,13 @@ export function createEffects(game) {
     const camera = game.camera.position;
     const dist = Math.hypot(camera.x - x, camera.y - y, camera.z - z);
     if (dist < SPAWN_RADIUS * 1.5) explosions.explode(x, y, z, radius, options);
-    const reach = Math.max(1, radius) * 12;
-    const closeness = Math.max(0, 1 - dist / reach);
-    if (closeness > 0 && !(options && options.shake === false)) {
+    const shake = explosionShakeAtDistance(dist, radius);
+    if (shake > 0 && !(options && options.shake === false)) {
       const rig = game.cameraRig;
-      if (rig && typeof rig.shake === 'function') rig.shake(Math.min(1, 0.25 + closeness * 0.9));
+      if (rig && typeof rig.shake === 'function') rig.shake(shake);
     }
-    if (closeness > 0 && !(options && options.flash === false)) flash(0xfff0d0, 0.2 + closeness * 0.6);
+    const glare = explosionFlashAtDistance(dist, radius);
+    if (glare > 0 && !(options && options.flash === false)) flash(0xfff0d0, glare);
   }
 
   /** A brief full-screen tint of `color` (0xRRGGBB) at `strength` 0..1 that fades within half a second. */
@@ -206,15 +207,18 @@ export function createEffects(game) {
     const dirX = e.dirX || 0;
     const dirY = e.dirY || 0;
     const dirZ = e.dirZ || 0;
-    const weapon = String(e.weaponId || '');
-    const big = /rifle|shotgun|sniper|launcher|rpg|heavy|mg/i.test(weapon);
-    muzzleFlash(x, y, z, dirX, dirY, dirZ, big ? 1.6 : 1);
+    const flashScale = MUZZLE_SCALE[e.model] || MUZZLE_SCALE[e.weaponId] || 1;
+    muzzleFlash(x, y, z, dirX, dirY, dirZ, flashScale);
     const hasHit = Number.isFinite(e.hitX) && Number.isFinite(e.hitY) && Number.isFinite(e.hitZ);
     const bx = hasHit ? e.hitX : x + dirX * 120;
     const by = hasHit ? e.hitY : y + dirY * 120;
     const bz = hasHit ? e.hitZ : z + dirZ * 120;
-    tracer(x, y, z, bx, by, bz, big ? TRACER_BIG : undefined);
-    if (hasHit && e.hit !== false) bulletImpact(bx, by, bz, -dirX, -dirY, -dirZ, e.hit && typeof e.hit === 'object' ? e.hit : null);
+    tracer(x, y, z, bx, by, bz, flashScale > 1.3 ? TRACER_BIG : undefined);
+    if (!hasHit) return;
+    // `hit` is what the bullet struck: 'world' | 'vehicle' | 'character' (or the object itself), `target` the object.
+    const what = e.target || (e.hit && typeof e.hit === 'object' ? e.hit : null);
+    const kind = typeof e.hit === 'string' ? e.hit : what && what.spec ? 'vehicle' : what && what.intent ? 'character' : e.hit ? 'world' : null;
+    if (kind === 'world' || kind === 'vehicle') bulletImpact(bx, by, bz, -dirX, -dirY, -dirZ, kind === 'vehicle' ? what : null);
   }
 
   /** A person is hit by a bullet: a small dark puff where it struck. */
@@ -354,6 +358,7 @@ export function createEffects(game) {
     events.on('shot:fired', onShotFired);
     events.on('character:damaged', onCharacterDamaged);
     events.on('character:knockedDown', onKnockedDown);
+    events.on('vehicle:despawned', (e) => glows.removeFor(e && e.vehicle));
   }
 
   return {
@@ -406,6 +411,8 @@ function createScreenFlash(game) {
 
 const SPAWN_RADIUS = 450;
 const TRACER_BIG = Object.freeze({ width: 0.12, length: 8 });
+/** How big each gun's muzzle flash is, by weapon model (or id). */
+const MUZZLE_SCALE = Object.freeze({ pistol: 1, smg: 1.15, rifle: 1.45, marksman: 1.6, shotgun: 1.75 });
 
 const FLASH_VERTEX_SHADER = /* glsl */ `
 varying vec2 vScreen;

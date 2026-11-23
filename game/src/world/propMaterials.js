@@ -105,6 +105,10 @@ function createFoliageMaterials(uniforms, texture) {
       .replace('#include <common>', `#include <common>\n${PROP_VERTEX_HEADER}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>\n${WIND_SWAY_VERTEX}`)
       .replace('#include <color_vertex>', TINTED_COLOR_VERTEX);
+    // Leaves are lit by their authored normals on both faces (no flip for the back), so a crown
+    // reads as one soft mass rather than a stack of light and dark cards.
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n  normal = normalize( vNormal );');
   };
   material.customProgramCacheKey = () => 'port-sarab-foliage-v1';
 

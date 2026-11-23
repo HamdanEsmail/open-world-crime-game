@@ -86,9 +86,9 @@ const NUMBER_KEYS = ['glowStrength', 'lightIntensity', 'hemiIntensity', 'exposur
 const NIGHT = {
   zenith: 0x071226, mid: 0x0f2244, horizon: 0x1e3a5f,
   glow: 0x2d4a7a, glowStrength: 0.0, disc: 0xdfe8ff,
-  light: 0x9ab8ff, lightIntensity: 1.3,
-  hemiSky: 0x2a4aa0, hemiGround: 0x1c2448, hemiIntensity: 3.2,
-  fogDensity: 0.00044, exposure: 1.55,
+  light: 0xb4c8ff, lightIntensity: 1.0,
+  hemiSky: 0x3e5290, hemiGround: 0x1c2448, hemiIntensity: 2.3,
+  fogDensity: 0.00044, exposure: 1.45,
   cloudLit: 0x2c3d60, cloudShade: 0x141d36, cloudCover: 0.6, cloudOpacity: 0.5,
   stars: 1, night: 1, dust: 0x3a3036,
 };
@@ -201,7 +201,7 @@ const KEYFRAMES = [
     zenith: 0x0d2250, mid: 0x1d3d78, horizon: 0x3a6c98,
     glow: 0x9a5a92, band: 0xd8705c, glowStrength: 0.4, disc: 0xff9060,
     light: 0x8fa8e0, lightIntensity: 0.7,
-    hemiSky: 0x4058b0, hemiGround: 0x2c3058, hemiIntensity: 2.6,
+    hemiSky: 0x56669e, hemiGround: 0x2c3058, hemiIntensity: 2.3,
     fogDensity: 0.0005, exposure: 1.5,
     cloudLit: 0x5a5a8a, cloudShade: 0x1c2448, cloudCover: 0.58, cloudOpacity: 0.7,
     stars: 0.5, night: 0.8, dust: 0x40344a,

@@ -2,6 +2,7 @@
 // the port quay, the Amber Dunes, district-tinted blocks and buildings, sidewalks, boulevards and
 // desert highways, landmarks; and, for the big city map, the district, street and landmark names.
 // The rotating minimap and the pause-screen city map both draw with this one painter.
+import { traceEightPointStar } from './hudIconLibrary.js';
 
 /**
  * Prepare the painter for game.city. A view is { scale (px per metre), originX, originZ }:
@@ -323,13 +324,20 @@ export function createCityMapPainter(game) {
         drawRotatedText(ctx, road.name.toUpperCase(), mx, my, angle, true);
       }
     }
-    // Landmark names under their icons.
+    // Landmarks: a small gold star, the name beneath it.
     if (view.scale > 0.22) {
       ctx.font = `700 ${Math.round(Math.min(14, 9 + view.scale * 3))}px ${LABEL_FONT}`;
       for (const mark of city.landmarks) {
         const px = toX(mark.x);
         const py = toY(mark.z);
         if (px < -60 || px > widthPx + 60 || py < -60 || py > heightPx + 60) continue;
+        traceEightPointStar(ctx, px, py + 3, 6.5);
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 2.4;
+        ctx.strokeStyle = 'rgba(14,27,42,0.9)';
+        ctx.stroke();
+        ctx.fillStyle = '#ffe9b0';
+        ctx.fill();
         ctx.lineWidth = 3.2;
         ctx.strokeStyle = 'rgba(14,27,42,0.9)';
         ctx.strokeText(mark.name, px, py + 17);
@@ -510,4 +518,6 @@ const LABEL_NUDGE = {
   spires: [0, 20],
   docks: [0, -30],
   southgate: [0, 30],
+  oldsarab: [0, 64],
+  lantern: [0, 92],
 };

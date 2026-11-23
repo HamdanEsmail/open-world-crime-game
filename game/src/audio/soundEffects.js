@@ -1,10 +1,10 @@
-// Every one-shot sound of the streets of Port Sarab, each a small synthesis recipe: gunshots by weapon
-// class (a pistol's crack, an SMG's rattle, a rifle's bark, a shotgun's boom), impacts and ricochets,
-// fists and falls, car crashes scaled by the hit, shattering glass, explosions, horns by vehicle class,
-// doors, engine start and stop, splashes and footsteps on road or sand. The interface sounds and story
-// stings live in interfaceSounds.js; SOUND_IDS lists them all.
-import { playTone, playNoise, makeSweptFilter } from './synthPrimitives.js';
+// Every one-shot sound of the streets of Port Sarab as a synthesis recipe: gunshots by weapon class (a
+// pistol's crack, an SMG's rattle, a rifle's bark, a shotgun's boom), impacts, ricochets, fists, falls,
+// crashes scaled by the hit, glass, explosions, horns by vehicle class, doors, engines, splashes and
+// footsteps. Interface sounds and story stings live in interfaceSounds.js; the guide lists every id.
+import { playTone, playNoise, makeSweptFilter, setPitchScale } from './synthPrimitives.js';
 import { INTERFACE_RECIPES } from './interfaceSounds.js';
+import { SOUND_EFFECT_IDS, isDieselClass } from './radioAndSoundGuide.js';
 
 /**
  * Render sound `id` into `destination` at time `when`. Works on any context, live or offline.
@@ -19,21 +19,18 @@ import { INTERFACE_RECIPES } from './interfaceSounds.js';
 export function playSoundRecipe(ctx, destination, id, when, params) {
   const recipe = WORLD_RECIPES[id] || INTERFACE_RECIPES[id];
   if (!recipe) return when;
-  return recipe(ctx, destination, when, params || NO_PARAMS);
+  const p = params || NO_PARAMS;
+  setPitchScale(typeof p.pitch === 'number' ? Math.max(0.25, Math.min(4, p.pitch)) : 1);
+  try {
+    return recipe(ctx, destination, when, p);
+  } finally {
+    setPitchScale(1);
+  }
 }
 
 /** Which mix bus a sound belongs to: interface sounds and stings skip the world's muffling. */
 export function soundBusFor(id) {
   return INTERFACE_RECIPES[id] ? 'ui' : 'effects';
-}
-
-/** The weapon class of a weapon id or model name: 'pistol' | 'smg' | 'rifle' | 'shotgun'. */
-export function weaponSoundClass(name) {
-  const n = String(name || '').toLowerCase();
-  if (n.includes('shot') || n.includes('scatter') || n.includes('pump')) return 'shotgun';
-  if (n.includes('smg') || n.includes('sub') || n.includes('machine') || n.includes('auto') || n.includes('spray')) return 'smg';
-  if (n.includes('rifle') || n.includes('carbine') || n.includes('sniper') || n.includes('marksman') || n.includes('assault')) return 'rifle';
-  return 'pistol';
 }
 
 /** The horn of each vehicle class: the notes it sounds, its waveform, and the resonance of its trumpet. */
@@ -99,7 +96,7 @@ const NO_PARAMS = {};
 
 /** Gunfire is the loudest thing on the street; horns sit well under it. */
 const GUN_LEVEL = 1.8;
-const HORN_LEVEL = 0.4;
+const HORN_LEVEL = 0.25;
 
 /** How each gun sounds: a supersonic crack, the body of the blast, a low thump and the street's echo. */
 const GUN_PROFILES = {
@@ -139,8 +136,8 @@ const WORLD_RECIPES = {
   windGust,
 };
 
-/** Every id play() understands. */
-export const SOUND_IDS = Object.freeze([...Object.keys(WORLD_RECIPES), ...Object.keys(INTERFACE_RECIPES)]);
+/** Every id play() understands, flattened from the guide's groups. */
+export const SOUND_IDS = Object.freeze(Object.values(SOUND_EFFECT_IDS).flat());
 
 function rand(min, max) {
   return min + Math.random() * (max - min);
@@ -148,7 +145,7 @@ function rand(min, max) {
 
 function gunshot(ctx, out, t, p, g) {
   const v = (p.intensity ?? 1) * GUN_LEVEL;
-  const pitch = (p.pitch ?? 1) * rand(0.95, 1.05);
+  const pitch = rand(0.95, 1.05);
   const far = Math.min(1, (p.distance || 0) / 120);
   let end = playNoise(ctx, out, t, { color: 'white', filter: 'highpass', freq: g.crackFreq * pitch, q: 0.7, attack: 0.0006, decay: g.crackDecay, gain: g.crack * v * (1 - far * 0.6) });
   playNoise(ctx, out, t, { color: 'white', filter: 'bandpass', freq: g.bodyFreq * pitch, freqEnd: g.bodyFreq * 0.55, q: 1.1, attack: 0.0008, decay: g.bodyDecay, gain: g.body * v });
@@ -226,7 +223,7 @@ function bulletWhiz(ctx, out, t, p) {
 
 function punch(ctx, out, t, p, weight) {
   const v = (p.intensity ?? 1) * weight;
-  const pitch = (p.pitch ?? 1) * rand(0.9, 1.1);
+  const pitch = (p.tone ?? 1) * rand(0.9, 1.1);
   playTone(ctx, out, t, { freq: 170 * pitch, freqEnd: 52, sweep: 0.09, attack: 0.001, decay: 0.1, gain: 0.5 * v });
   playNoise(ctx, out, t, { color: 'white', filter: 'bandpass', freq: 1800 * pitch, q: 1.1, attack: 0.0008, decay: 0.035, gain: 0.32 * v });
   return playNoise(ctx, out, t, { color: 'pink', filter: 'lowpass', freq: 520, attack: 0.002, decay: 0.08, gain: 0.32 * v });
@@ -248,7 +245,7 @@ function bodyFall(ctx, out, t, p) {
 
 function bodyHit(ctx, out, t, p) {
   const v = p.intensity ?? 1;
-  punch(ctx, out, t, { intensity: v, pitch: 0.75 }, 1.3);
+  punch(ctx, out, t, { intensity: v, tone: 0.75 }, 1.3);
   playNoise(ctx, out, t, { color: 'brown', filter: 'lowpass', freq: 300, attack: 0.002, decay: 0.2, gain: 0.4 * v });
   return bodyFall(ctx, out, t + 0.32, { intensity: v * 0.8 });
 }
@@ -366,7 +363,7 @@ function doorClose(ctx, out, t) {
 }
 
 function engineStart(ctx, out, t, p) {
-  const diesel = isHeavyClass(p.className);
+  const diesel = isDieselClass(p.className);
   const crank = diesel ? 120 : 170;
   const crankTime = diesel ? 0.75 : 0.55;
   // The starter motor whirrs, pulsing with each compression stroke.
@@ -416,7 +413,7 @@ function shapeCatch(param, t) {
 }
 
 function engineStop(ctx, out, t, p) {
-  const low = isHeavyClass(p.className) ? 32 : 46;
+  const low = isDieselClass(p.className) ? 32 : 46;
   let end = playTone(ctx, out, t, { type: 'sawtooth', freq: low, freqEnd: low * 0.45, sweep: 0.55, attack: 0.01, decay: 0.6, gain: 0.24, filter: { type: 'lowpass', freq: 520, freqEnd: 160, q: 1.5 } });
   playNoise(ctx, out, t + 0.45, { color: 'brown', filter: 'lowpass', freq: 220, attack: 0.004, decay: 0.12, gain: 0.25 });
   for (const delay of [0.95, 1.5, 2.2]) {
@@ -462,7 +459,7 @@ function footstep(ctx, out, t, p) {
     return end;
   }
   if (surface === 'water') return splash(ctx, out, t, { intensity: 0.12 * v });
-  const pitch = rand(0.85, 1.15) * (p.pitch ?? 1);
+  const pitch = rand(0.85, 1.15);
   playNoise(ctx, out, t, { filter: 'bandpass', freq: 1700 * pitch, q: 1.5, attack: 0.0008, decay: 0.032, gain: 0.2 * v });
   playTone(ctx, out, t, { freq: 140 * pitch, freqEnd: 90, attack: 0.001, decay: 0.03, gain: 0.12 * v });
   return playNoise(ctx, out, t + 0.012, { filter: 'highpass', freq: 3200, attack: 0.008, decay: 0.05, gain: 0.035 * v });
@@ -472,8 +469,4 @@ function windGust(ctx, out, t, p) {
   const v = p.intensity ?? 1;
   playNoise(ctx, out, t, { color: 'pink', filter: 'bandpass', freq: 420, freqEnd: 1100, sweep: 1.2, q: 0.9, attack: 0.8, hold: 0.4, decay: 1.8, gain: 0.3 * v });
   return playNoise(ctx, out, t + 0.3, { color: 'pink', filter: 'bandpass', freq: 1300, freqEnd: 700, sweep: 2.2, q: 9, attack: 0.7, hold: 0.3, decay: 1.4, gain: 0.12 * v });
-}
-
-function isHeavyClass(className) {
-  return className === 'truck' || className === 'bus' || className === 'armored';
 }

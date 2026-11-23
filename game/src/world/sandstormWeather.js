@@ -46,7 +46,7 @@ export function createSandstormWeather(game) {
   function start(intensity = 1, seconds = 50) {
     target = clamp01(intensity);
     rampFrom = weather.sandstorm;
-    rampSeconds = Math.max(0, seconds);
+    rampSeconds = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
     rampElapsed = 0;
     if (rampSeconds === 0 || target <= rampFrom) {
       weather.sandstorm = target;
@@ -66,7 +66,7 @@ export function createSandstormWeather(game) {
   function clear(seconds = 30) {
     target = 0;
     rampFrom = weather.sandstorm;
-    rampSeconds = Math.max(0, seconds);
+    rampSeconds = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
     rampElapsed = 0;
     withFront = false;
     weather.frontDistance = Infinity;
@@ -160,8 +160,9 @@ export function createSandstormWeather(game) {
   return weather;
 }
 
+/** Clamp to 0..1; anything that is not a number counts as 0. */
 function clamp01(value) {
-  return value < 0 ? 0 : value > 1 ? 1 : value;
+  return value > 0 ? (value < 1 ? value : 1) : 0;
 }
 
 function smoothstep(edge0, edge1, value) {

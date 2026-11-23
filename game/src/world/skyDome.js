@@ -1,8 +1,9 @@
 // The sky over Port Sarab: a camera-centred dome painted by one shader. A deep zenith melting into a
 // hazy horizon band, the sun's disc with its warm bloom, streaks of high cloud that catch the sunset,
-// and by night stars and a moon over the gulf. It is drawn first, behind everything, never fogged,
-// and its horizon is exactly the haze colour so the city, the sea and the sky meet without a seam.
+// and by night stars and a moon over the gulf. It sits behind everything at the far plane, is never
+// fogged, and its horizon is exactly the haze colour so the city, the sea and the sky meet seamlessly.
 import * as THREE from 'three';
+import { getSkyNoiseTexture } from './skyNoiseTexture.js';
 
 /**
  * Build the sky dome and add it to the scene. The day-night cycle drives it through `uniforms`.
@@ -10,6 +11,7 @@ import * as THREE from 'three';
  */
 export function createSkyDome(game) {
   const uniforms = createSkyDomeUniforms();
+  uniforms.uNoiseMap.value = getSkyNoiseTexture(game);
   const material = new THREE.ShaderMaterial({
     name: 'skyDome',
     uniforms,
@@ -17,7 +19,7 @@ export function createSkyDome(game) {
     fragmentShader: SKY_DOME_FRAGMENT,
     side: THREE.BackSide,
     depthWrite: false,
-    depthTest: false,
+    depthTest: true,
     fog: false,
     // The fog on everything else is applied after tone mapping, so the sky stays untouched by it too.
     toneMapped: false,
@@ -25,7 +27,8 @@ export function createSkyDome(game) {
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), material);
   mesh.name = 'skyDome';
   mesh.frustumCulled = false;
-  mesh.renderOrder = -1000;
+  // Painted after the city at the far plane, so only the sky that shows between buildings is shaded.
+  mesh.renderOrder = SKY_RENDER_ORDER;
   mesh.matrixAutoUpdate = false;
   game.scene.add(mesh);
 
@@ -42,6 +45,7 @@ export function createSkyDomeUniforms() {
   return {
     ...createSkyColorUniforms(),
     uTime: { value: 0 },
+    uNoiseMap: { value: null },
     uDiscColor: { value: new THREE.Color(1, 0.95, 0.85) },
     uDiscSize: { value: 0.022 },
     uDiscAlpha: { value: 1 },
@@ -142,12 +146,17 @@ vec3 skyBaseColor(vec3 dir) {
   float lowSun = 1.0 - smoothstep(0.02, 0.5, uSunDir.y);
   float band = pow(towardSun, 2.5) * exp(-y * 4.5) * lowSun;
   float aboveHaze = smoothstep(0.0, 0.07, y);
-  col = mix(col, uGlowColor, clamp(wide * 0.62 * uGlowStrength, 0.0, 0.9) * aboveHaze);
+  // Under a low sun the warmth hugs the horizon and the zenith keeps its depth.
+  float hug = 1.0 - smoothstep(0.05, 0.65, y) * 0.7 * lowSun;
+  col = mix(col, uGlowColor, clamp(wide * 0.62 * uGlowStrength * hug, 0.0, 0.9) * aboveHaze);
   col = mix(col, uBandColor, clamp(band * 0.75 * uGlowStrength, 0.0, 0.9) * aboveHaze);
   vec3 hot = clamp(uGlowColor * core * 0.75 * uGlowStrength * aboveHaze, 0.0, 1.0);
   return 1.0 - (1.0 - col) * (1.0 - hot);
 }
 `;
+
+/** Drawn after every opaque thing, before the sea and other see-through things. */
+const SKY_RENDER_ORDER = 10000;
 
 const SKY_DOME_VERTEX = /* glsl */ `
 varying vec3 vDir;
@@ -155,11 +164,13 @@ void main() {
   vDir = position;
   vec4 viewPos = viewMatrix * vec4(cameraPosition + position * 1500.0, 1.0);
   gl_Position = projectionMatrix * viewPos;
+  gl_Position.z = gl_Position.w * 0.999999;
 }
 `;
 
 const SKY_DOME_FRAGMENT = /* glsl */ `
 uniform float uTime;
+uniform sampler2D uNoiseMap;
 uniform vec3 uDiscColor;
 uniform float uDiscSize;
 uniform float uDiscAlpha;
@@ -183,9 +194,9 @@ float highCloudStreaks(vec3 dir) {
   p = vec2(p.x * 0.80 - p.y * 0.60, p.x * 0.60 + p.y * 0.80);
   p += vec2(uTime * 0.0030, uTime * 0.0009);
   // Bend the streaks with a slow warp so they sweep and curl instead of running ruler-straight.
-  p += vec2(sarabNoise(p * 0.35 + 3.1), sarabNoise(p * 0.35 + 8.7)) * 1.4 - 0.7;
-  float shape = sarabFbm(vec2(p.x * 0.42, p.y * 2.3));
-  float wisps = sarabNoise(vec2(p.x * 2.2, p.y * 13.0));
+  p += texture2D(uNoiseMap, p * 0.0875 + 0.31).gb * 1.4 - 0.7;
+  float shape = texture2D(uNoiseMap, vec2(p.x * 0.42, p.y * 2.3) * 0.125).r;
+  float wisps = texture2D(uNoiseMap, vec2(p.x * 2.2, p.y * 13.0) * 0.03125).a;
   float n = shape * 0.84 + wisps * 0.16;
   float cover = smoothstep(uCloudCover, uCloudCover + 0.22, n);
   return cover * smoothstep(0.012, 0.18, dir.y);

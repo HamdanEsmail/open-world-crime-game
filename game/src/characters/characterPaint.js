@@ -44,7 +44,10 @@ export function paintBody(look, rig) {
   add(PART.PELVIS, FRAME.PELVIS, hipColour, bottom.colorB || 0x2a1e16, bottom.belt && !garment ? 1 : 0, w * (rig.hips || 1), h, w);
   add(PART.TORSO, FRAME.CHEST, top.color, top.colorB, TORSO_PATTERN[top.pattern] || 0, Math.pow(w, 0.85) * rig.shoulders, h, w);
   const headScale = 0.97 + 0.03 * h;
-  add(PART.HEAD, FRAME.HEAD, skin, look.eyes || 0x1a120c, 0, headScale, headScale, headScale, false, DYNAMIC.FACE);
+  const headX = headScale * 0.89;
+  const headY = headScale * 0.96;
+  const headZ = headScale * 0.95;
+  add(PART.HEAD, FRAME.HEAD, skin, look.eyes || 0x1a120c, 0, headX, headY, headZ, false, DYNAMIC.FACE);
 
   const armBulk = Math.pow(w, 0.7);
   for (let side = 0; side < 2; side += 1) {
@@ -84,14 +87,17 @@ export function paintBody(look, rig) {
   if (!covered && hairStyle && hairStyle !== 'none') {
     const long = hairStyle === 'long';
     const s = hairStyle === 'volume' ? [1.15, 1.08, 1.13] : hairStyle === 'buzz' ? [0.988, 0.986, 0.988] : [1, 1, 1];
-    add(long ? PART.HAIR_LONG : PART.HAIR_SHORT, FRAME.HEAD, look.hair, look.hair, 0, s[0] * headScale, s[1] * headScale, s[2] * headScale);
+    add(long ? PART.HAIR_LONG : PART.HAIR_SHORT, FRAME.HEAD, look.hair, look.hair, 0, s[0] * headX, s[1] * headY, s[2] * headZ);
   }
-  if (look.beard) add(PART.BEARD, FRAME.HEAD, look.beard, shade(look.beard, 0.35), 0, headScale, headScale, headScale, true);
+  if (look.beard) {
+    const beard = mixColour(look.beard, skin, 0.2);
+    add(PART.BEARD, FRAME.HEAD, beard, shade(beard, 0.45), 0, headX, headY, headZ, true);
+  }
   if (headwear) {
     const kind = HEADWEAR_PART[headwear.kind];
     if (kind !== undefined) {
       const pattern = HEADWEAR_PATTERN[headwear.pattern] || 0;
-      add(kind, FRAME.HEAD, headwear.color, headwear.colorB === undefined ? headwear.color : headwear.colorB, pattern, headScale, headScale, headScale);
+      add(kind, FRAME.HEAD, headwear.color, headwear.colorB === undefined ? headwear.color : headwear.colorB, pattern, headX, headY, headZ);
     }
   }
   if (garment) {
@@ -145,6 +151,14 @@ export function createPaintedMaterial(partKind, doubleSided) {
 export function linear(hex) {
   _colour.setHex(hex === undefined || hex === null ? 0xff00ff : hex);
   return [_colour.r, _colour.g, _colour.b];
+}
+
+/** Mix two 0xRRGGBB colours (t = 0 is a, 1 is b). */
+function mixColour(a, b, t) {
+  const r = Math.round(((a >> 16) & 255) * (1 - t) + ((b >> 16) & 255) * t);
+  const g = Math.round(((a >> 8) & 255) * (1 - t) + ((b >> 8) & 255) * t);
+  const bl = Math.round((a & 255) * (1 - t) + (b & 255) * t);
+  return (r << 16) | (g << 8) | bl;
 }
 
 /** Darken (factor < 1) a 0xRRGGBB colour. */

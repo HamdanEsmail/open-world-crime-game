@@ -2,6 +2,12 @@
 // marina basin with its piers, the port quay, rolling dunes around the city, and the stunt ramps.
 // Cars, people, the camera and the terrain mesh all ask this one place how high the ground is.
 
+/** Sidewalks and the floors of city blocks stand this far above the road surface. */
+const KERB_HEIGHT = 0.14;
+const ROAD = 0;
+const SIDEWALK = 1;
+const PLAZA = 2;
+
 /** Build game.terrain: heightAt(x, z), surfaceAt(x, z), isWater(x, z), normalAt(x, z, out). */
 export function createTerrainHeight(game) {
   const city = game.city;
@@ -50,8 +56,33 @@ export function createTerrainHeight(game) {
   function baseHeightAt(x, z) {
     if (z < coast.beachTopZ) return shoreHeightAt(x, z);
     const outside = distanceOutsideCity(x, z);
-    if (outside <= 24) return 0;
+    if (outside <= 24) return outside <= edge && cityPavingAt(x, z) !== ROAD ? KERB_HEIGHT : 0;
     return duneHeightAt(x, z, outside);
+  }
+
+  /** Inside the street grid: ROAD, SIDEWALK or PLAZA (the floor of a block). Roads are at 0, the rest a kerb higher. */
+  function cityPavingAt(x, z) {
+    let nearAvenue = 1e9;
+    let halfAvenue = 0;
+    for (let i = 0; i < avenueX.length; i += 1) {
+      const d = Math.abs(x - avenueX[i]);
+      if (d < nearAvenue) {
+        nearAvenue = d;
+        halfAvenue = avenueHalf[i];
+      }
+    }
+    let nearStreet = 1e9;
+    let halfStreet = 0;
+    for (let j = 0; j < streetZ.length; j += 1) {
+      const d = Math.abs(z - streetZ[j]);
+      if (d < nearStreet) {
+        nearStreet = d;
+        halfStreet = streetHalf[j];
+      }
+    }
+    if (nearAvenue < halfAvenue || nearStreet < halfStreet) return ROAD;
+    if (nearAvenue < halfAvenue + sidewalk || nearStreet < halfStreet + sidewalk) return SIDEWALK;
+    return PLAZA;
   }
 
   /** North of the Corniche: marina, port quay, or beach sliding under the water. */
@@ -131,28 +162,9 @@ export function createTerrainHeight(game) {
       if (x > port.minX && x < port.maxX) return 'plaza';
       return 'beach';
     }
-    if (x > urban.minX - edge && x < urban.maxX + edge && z < urban.maxZ + edge) {
-      let nearAvenue = 1e9;
-      let halfAvenue = 0;
-      for (let i = 0; i < avenueX.length; i += 1) {
-        const d = Math.abs(x - avenueX[i]);
-        if (d < nearAvenue) {
-          nearAvenue = d;
-          halfAvenue = avenueHalf[i];
-        }
-      }
-      let nearStreet = 1e9;
-      let halfStreet = 0;
-      for (let j = 0; j < streetZ.length; j += 1) {
-        const d = Math.abs(z - streetZ[j]);
-        if (d < nearStreet) {
-          nearStreet = d;
-          halfStreet = streetHalf[j];
-        }
-      }
-      if (nearAvenue < halfAvenue || nearStreet < halfStreet) return 'road';
-      if (nearAvenue < halfAvenue + sidewalk || nearStreet < halfStreet + sidewalk) return 'sidewalk';
-      return 'plaza';
+    if (distanceOutsideCity(x, z) <= edge) {
+      const paving = cityPavingAt(x, z);
+      return paving === ROAD ? 'road' : paving === SIDEWALK ? 'sidewalk' : 'plaza';
     }
     const road = distanceToDesertRoad(x, z);
     return road.distance < road.half ? 'road' : 'sand';
@@ -180,7 +192,8 @@ export function createTerrainHeight(game) {
     return z >= coast.beachTopZ && x > urban.minX - 20 && x < urban.maxX + 20 && z < urban.maxZ + 20;
   }
 
-  return { heightAt, baseHeightAt, surfaceAt, isWater, normalAt, isFlatCity, seaLevel, clampToWorld };
+  // kerbHeight is 0 for the vehicle suspension: the kerb is already in heightAt, so it must not be added twice.
+  return { heightAt, baseHeightAt, surfaceAt, isWater, normalAt, isFlatCity, seaLevel, clampToWorld, kerbHeight: 0, sidewalkHeight: KERB_HEIGHT };
 
   /** Keep a point inside the playable world; returns true when it had to be moved. */
   function clampToWorld(pos) {

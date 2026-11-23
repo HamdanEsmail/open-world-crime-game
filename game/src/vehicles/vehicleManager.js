@@ -4,19 +4,11 @@
 import * as THREE from 'three';
 import { handlingProfileFor } from './vehicleHandlingProfile.js';
 import { stepVehicleDynamics } from './vehiclePhysics.js';
+import { restOnGround } from './vehicleSuspension.js';
+import { tyreGripOnSurface, surfaceDrag, landingDamage, sinksInWater } from './drivingRules.js';
 import { createVehicleCollisions } from './vehicleCollisions.js';
 import { createVehicleDamage } from './vehicleDamage.js';
 import { createVehicleAutopilot } from './vehicleAutopilot.js';
-
-/** The physics sub-step: about 1/120 s, sized so the sub-steps exactly cover each frame. */
-const STEP = 1 / 120;
-const MAX_SUBSTEPS = 8;
-/** Seconds a vehicle must stand perfectly still, untouched, before it sleeps. */
-const SLEEP_AFTER = 0.8;
-/** Above this speed (m/s) the static world is checked every sub-step, not once a frame. */
-const FAST_SPEED = 10;
-/** Landing faster than this (m/s, downward) hurts the car. */
-const HARD_LANDING = 13;
 
 /**
  * Build game.vehicles.
@@ -28,6 +20,9 @@ export function createVehicleManager(game) {
   const world = { terrain: null, gravity: 9.81, seaLevel: -1 };
   const paintRng = game.rng && game.rng.fork ? game.rng.fork('vehicle-paint') : null;
   const stats = { awake: 0, asleep: 0, substeps: 0, updateMs: 0 };
+  const pendingDespawns = [];
+  let updating = false;
+  let warnedFailure = false;
   let localIds = 1;
 
   const manager = {
@@ -106,19 +101,31 @@ export function createVehicleManager(game) {
       tags: {},
       dynamics: createVehicleDynamics(profile, x, z),
     };
+    setDown(vehicle);
     list.push(vehicle);
     game.events.emit('vehicle:spawned', { vehicle });
     return vehicle;
   }
 
-  /** Take a vehicle out of the world. */
+  /**
+   * Take a vehicle out of the world. Called from inside the vehicle update (an event handler),
+   * the removal waits until the frame's physics is done.
+   */
   function despawn(vehicle) {
-    const index = list.indexOf(vehicle);
-    if (index === -1) return false;
-    list.splice(index, 1);
+    if (!vehicle || vehicle.despawned || list.indexOf(vehicle) === -1) return false;
     vehicle.despawned = true;
-    game.events.emit('vehicle:despawned', { vehicle });
+    if (updating) {
+      pendingDespawns.push(vehicle);
+      return true;
+    }
+    removeFromList(vehicle);
     return true;
+  }
+
+  function removeFromList(vehicle) {
+    const index = list.indexOf(vehicle);
+    if (index !== -1) list.splice(index, 1);
+    game.events.emit('vehicle:despawned', { vehicle });
   }
 
   /**
@@ -130,6 +137,7 @@ export function createVehicleManager(game) {
     let bestSq = (maxDistance === undefined ? Infinity : maxDistance) ** 2;
     for (let i = 0; i < list.length; i += 1) {
       const vehicle = list[i];
+      if (vehicle.despawned) continue;
       const dx = vehicle.pos.x - x;
       const dz = vehicle.pos.z - z;
       const d2 = dx * dx + dz * dz;
@@ -217,7 +225,16 @@ export function createVehicleManager(game) {
     dyn.prevX = x;
     dyn.prevZ = z;
     dyn.airTime = 0;
+    setDown(vehicle);
     wake(vehicle);
+  }
+
+  /** Rest a vehicle on its four wheel contacts (surfaces first, so a kerb counts). */
+  function setDown(vehicle) {
+    const terrain = game.terrain;
+    if (!terrain || !terrain.heightAt) return;
+    readSurfaces(vehicle, terrain);
+    restOnGround(vehicle, vehicle.dynamics.profile, vehicle.dynamics, terrain);
   }
 
   function wake(vehicle) {
@@ -241,8 +258,25 @@ export function createVehicleManager(game) {
     world.gravity = config && config.gravity ? config.gravity : 9.81;
     world.seaLevel = config && typeof config.seaLevel === 'number' ? config.seaLevel : -1;
     const steps = Math.max(1, Math.min(MAX_SUBSTEPS, Math.round(dt / STEP)));
-    const h = dt / steps;
+    updating = true;
+    try {
+      simulateFrame(dt, steps);
+    } catch (error) {
+      if (!warnedFailure) {
+        console.warn('vehicles: a frame of the simulation failed', error);
+        warnedFailure = true;
+      }
+    } finally {
+      updating = false;
+      while (pendingDespawns.length > 0) removeFromList(pendingDespawns.pop());
+    }
+    stats.substeps = steps;
+    stats.updateMs = performance.now() - started;
+  }
 
+  /** The frame's work: wake and read the ground, sub-step physics and collisions, then the rest. */
+  function simulateFrame(dt, steps) {
+    const h = dt / steps;
     let awake = 0;
     for (let i = 0; i < list.length; i += 1) {
       if (prepareVehicle(list[i])) awake += 1;
@@ -270,11 +304,8 @@ export function createVehicleManager(game) {
     }
     collisions.resolveCharacterCollisions(list, now);
     damage.update(dt);
-
     stats.awake = awake;
     stats.asleep = list.length - awake;
-    stats.substeps = steps;
-    stats.updateMs = performance.now() - started;
   }
 
   /**
@@ -315,36 +346,25 @@ export function createVehicleManager(game) {
       const pl = (i & 1) === 0 ? profile.halfTrack : -profile.halfTrack;
       const kind = terrain.surfaceAt(cgX + s * pf + c * pl, cgZ + c * pf - s * pl);
       dyn.surface[i] = kind;
-      if (kind === 'sand' || kind === 'beach') {
-        // Loose ground: less grip, a softer tyre curve, and drag that bogs down a low road car.
-        dyn.surfaceGrip[i] = profile.sandGrip + (kind === 'beach' ? 0.05 : 0);
-        dyn.surfaceStiffness[i] = 0.62;
-        dyn.sandDrag[i] = profile.sandDrag * (1.5 + 0.16 * speed);
-      } else if (kind === 'sidewalk') {
-        dyn.surfaceGrip[i] = 0.93;
-        dyn.surfaceStiffness[i] = 1;
-        dyn.sandDrag[i] = 0;
-      } else if (kind === 'water') {
-        dyn.surfaceGrip[i] = 0.45;
-        dyn.surfaceStiffness[i] = 0.5;
-        dyn.sandDrag[i] = 1.5;
-      } else {
-        dyn.surfaceGrip[i] = 1;
-        dyn.surfaceStiffness[i] = 1;
-        dyn.sandDrag[i] = 0;
-      }
+      // Loose ground: less grip, a softer tyre curve, and drag that bogs down a low road car.
+      dyn.surfaceGrip[i] = tyreGripOnSurface(kind, profile.offroad);
+      dyn.surfaceStiffness[i] = kind === 'sand' || kind === 'beach' ? 0.62 : kind === 'water' ? 0.5 : 1;
+      dyn.sandDrag[i] = surfaceDrag(kind, profile.offroad, speed);
     }
   }
 
   /** After the sub-steps: landing and terrain-wall events, sinking, and falling asleep. */
   function finishFrame(vehicle, dt) {
     const dyn = vehicle.dynamics;
+    // Health may have been set directly (a mission, a garage): keep smoke and engine power in step.
+    if (!vehicle.wrecked) damage.refreshEngine(vehicle);
     if (dyn.pendingLanding > 0) {
       const impact = dyn.pendingLanding;
       dyn.pendingLanding = 0;
       game.events.emit('vehicle:landed', { vehicle, impact });
       // A stunt-ramp landing is free; dropping off a quay or a dune crest onto the nose is not.
-      if (impact > HARD_LANDING) damage.applyDamage(vehicle, (impact - HARD_LANDING) * 0.025 * vehicle.maxHealth, { kind: 'crash' });
+      const hurt = landingDamage(impact, vehicle.maxHealth);
+      if (hurt > 0) damage.applyDamage(vehicle, hurt, { kind: 'crash' });
     }
     if (dyn.pendingTerrainImpact > 0) {
       collisions.reportTerrainImpact(vehicle, dyn.pendingTerrainImpact);
@@ -352,7 +372,7 @@ export function createVehicleManager(game) {
     }
     if (dyn.inWater && dyn.submerged > 0) {
       dyn.waterTime += dt;
-      if (!dyn.sunk && ((dyn.submerged > 0.55 && dyn.waterTime > 1.5) || dyn.waterTime > 5)) damage.sink(vehicle);
+      if (!dyn.sunk && sinksInWater(dyn.submerged, dyn.waterTime)) damage.sink(vehicle);
     } else if (dyn.waterTime > 0) {
       dyn.waterTime = Math.max(0, dyn.waterTime - dt);
     }
@@ -427,6 +447,10 @@ function createVehicleDynamics(profile, x, z) {
     wheelspin: 0,
     shiftTimer: 0,
     enginePower: 1,
+    powerScale: 1,
+    speedScale: 1,
+    gripScale: 1,
+    tyresBurst: false,
     airTime: 0,
     airVelY: 0,
     pendingLanding: 0,
@@ -465,3 +489,11 @@ function makeWheel() {
 function finite(value, fallback) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
+
+/** The physics sub-step: about 1/120 s, sized so the sub-steps exactly cover each frame. */
+const STEP = 1 / 120;
+const MAX_SUBSTEPS = 8;
+/** Seconds a vehicle must stand perfectly still, untouched, before it sleeps. */
+const SLEEP_AFTER = 0.8;
+/** Above this speed (m/s) the static world is checked every sub-step, not once a frame. */
+const FAST_SPEED = 10;

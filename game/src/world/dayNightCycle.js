@@ -82,7 +82,7 @@ export function createDayNightCycle(game) {
 
   /** Relight the world for the current hour and weather, and move the shadow box. */
   function update(dt) {
-    const hour = game.time.hour;
+    const hour = Number.isFinite(game.time.hour) ? game.time.hour : 12;
     sampleTimeOfDay(hour, state);
     sunPathDirection(hour, sky.trueSunDirection);
     moonPathDirection(hour, sky.moonDirection);
@@ -299,8 +299,9 @@ function installShadowEdgeFade() {
   return true;
 }
 
+/** Clamp to 0..1; anything that is not a number counts as 0. */
 function clamp01(value) {
-  return value < 0 ? 0 : value > 1 ? 1 : value;
+  return value > 0 ? (value < 1 ? value : 1) : 0;
 }
 
 function smoothstep(edge0, edge1, value) {

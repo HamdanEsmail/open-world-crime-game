@@ -486,6 +486,15 @@ export function createCollisionWorld(game) {
     for (const landmark of city.landmarks) {
       if (landmark.building !== undefined || landmark.h <= 0) continue;
       if (landmark.kind === 'portCranes' || landmark.kind === 'solarFarm' || landmark.kind === 'airfield' || landmark.kind === 'oasis') continue;
+      if (landmark.kind === 'gate') {
+        // An arch: two solid piers with the highway running between them.
+        const pier = 6;
+        for (const side of [-1, 1]) {
+          const centre = landmark.x + side * (landmark.w / 2 - pier / 2);
+          addBox({ minX: centre - pier / 2, maxX: centre + pier / 2, minZ: landmark.z - landmark.d / 2, maxZ: landmark.z + landmark.d / 2, y0: -10, y1: landmark.h, kind: 'landmark', ref: landmark });
+        }
+        continue;
+      }
       if (landmark.radius) addPost({ x: landmark.x, z: landmark.z, radius: landmark.radius, y0: -10, y1: landmark.h, kind: 'landmark', ref: landmark });
       else if (landmark.w) addBox({ minX: landmark.x - landmark.w / 2, maxX: landmark.x + landmark.w / 2, minZ: landmark.z - landmark.d / 2, maxZ: landmark.z + landmark.d / 2, y0: -10, y1: landmark.h, kind: 'landmark', ref: landmark });
     }

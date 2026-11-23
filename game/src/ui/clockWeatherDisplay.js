@@ -2,6 +2,7 @@
 // low dusk sun, a moon, or the wavy lines of a khamsin sandstorm when the wind is blowing sand.
 import { skyIconSvg } from './hudIconLibrary.js';
 import { createElement, setText } from './uiElements.js';
+import { formatClock } from './hudAndMenuGuide.js';
 
 /**
  * Build the clock in `container` (#hud-clock-weather).
@@ -16,9 +17,7 @@ export function createClockWeatherDisplay(game, container) {
   /** Rewrite the time once per in-game minute and the icon when the sky changes. */
   function update() {
     const hour = game.time ? game.time.hour : 12;
-    const whole = Math.floor(hour);
-    const minutes = Math.floor((hour - whole) * 60);
-    setText(time, `${whole < 10 ? '0' : ''}${whole}:${minutes < 10 ? '0' : ''}${minutes}`);
+    setText(time, formatClock(hour));
     const sandstorm = game.weather ? game.weather.sandstorm || 0 : 0;
     const sky = sandstorm > 0.3 ? 'sandstorm' : hour < 5.4 || hour >= 20.2 ? 'moon' : hour < 7 || hour >= 17.6 ? 'dusk' : 'sun';
     if (sky !== shownSky) {

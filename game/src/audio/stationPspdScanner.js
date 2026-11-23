@@ -3,17 +3,14 @@
 // data bursts, and the squelch tail that ends every call. The hotter the player's wanted level, the
 // busier the channel gets.
 import { startNoiseLoop, playNoise, playTone, makeDrive } from './synthPrimitives.js';
+import { RADIO_STATION_GUIDE } from './radioAndSoundGuide.js';
 
-/** The station: tuning it starts a chatter player instead of a music composer. */
+/** The station (facts from the guide): tuning it starts a chatter player instead of a music composer. */
 export const PSPD_SCANNER = {
-  id: 'pspd_scanner',
-  name: 'PSPD Scanner',
-  frequency: '460.2 MHz',
-  host: 'Port Sarab Dispatch',
-  tagline: 'Unit chatter from the Port Sarab Police Department.',
+  ...RADIO_STATION_GUIDE.find((s) => s.id === 'pspd_scanner'),
   color: '#2f6bff',
   kind: 'scanner',
-  mix: { level: 1.0 },
+  mix: { level: 0.26 },
   createPlayer: createScannerChatter,
 };
 

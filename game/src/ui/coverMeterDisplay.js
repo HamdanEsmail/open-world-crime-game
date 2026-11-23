@@ -3,6 +3,7 @@
 // and a gold star marks where the balance sits. It flashes whichever side just moved.
 import { eightPointStarPath } from './hudIconLibrary.js';
 import { createElement, setText, setStyle, setShown, replayClass } from './uiElements.js';
+import { coverMeterBalance } from './hudAndMenuGuide.js';
 
 /**
  * Build the meter in `container` (#hud-cover-meter).
@@ -45,7 +46,7 @@ export function createCoverMeterDisplay(game, container) {
       setText(badgeValue, badge);
       setStyle(badgeFill, 'width', `${badge / 2}%`);
     }
-    setStyle(marker, 'left', `${50 + (badge - crew) / 2}%`);
+    setStyle(marker, 'left', `${coverMeterBalance(crew, badge)}%`);
   }
 
   return { update };

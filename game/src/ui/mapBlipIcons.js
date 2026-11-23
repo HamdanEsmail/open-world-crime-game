@@ -3,6 +3,7 @@
 // police posts, flashing red-blue dots for patrol cars, a pin for the player's waypoint. Drawn on
 // canvas, upright, the same on the rotating minimap, the city map and its legend.
 import { traceEightPointStar } from './hudIconLibrary.js';
+import { blipStyleForMarker } from './hudAndMenuGuide.js';
 
 /**
  * Draw one blip centred on (x, y) with radius `r` pixels.
@@ -79,10 +80,53 @@ export function drawBlip(ctx, kind, x, y, r, marker, now = 0) {
   ctx.restore();
 }
 
+/**
+ * A cache of pre-drawn blips for maps redrawn every frame: each blip is drawn once into a small
+ * sprite (two for blinking ones) and then stamped with a single drawImage.
+ * @returns {{draw(ctx, kind:string, x:number, y:number, r:number, marker?:Object, now?:number):void}}
+ */
+export function createBlipSpriteCache() {
+  const shared = new Map();
+  const sharedFlashing = new Map();
+  function draw(ctx, kind, x, y, r, marker, now = 0) {
+    const style = BLIP_STYLES[kind] || BLIP_STYLES.activity;
+    if (style.shape === 'ring') {
+      drawBlip(ctx, kind, x, y, r, marker, now);
+      return;
+    }
+    const flashes = kind === 'police' || Boolean(marker && marker.flash && style.shape === 'dot');
+    const phase = kind === 'police' ? Math.floor(now * 4) % 2 : flashes ? Math.floor(now * 3) % 2 : 0;
+    const personal = style.shape === 'badge' && marker && (marker.letter || (style.useMarkerColor && marker.color !== undefined));
+    let entry = personal ? marker.__blipSprites : (flashes ? sharedFlashing : shared).get(kind);
+    if (!entry || entry.r !== r || (personal && (entry.letter !== marker.letter || entry.color !== marker.color))) {
+      entry = { r, letter: personal ? marker.letter : null, color: personal ? marker.color : null, sprites: [null, null] };
+      if (personal) marker.__blipSprites = entry;
+      else (flashes ? sharedFlashing : shared).set(kind, entry);
+    }
+    let sprite = entry.sprites[phase];
+    if (!sprite) {
+      sprite = renderBlipSprite(kind, r, personal ? marker : flashes && kind !== 'police' ? FLASHING : null, phase === 0 ? 0 : kind === 'police' ? 0.3 : 0.4);
+      entry.sprites[phase] = sprite;
+    }
+    ctx.drawImage(sprite, x - sprite.width / 2, y - sprite.height / 2);
+  }
+  return { draw };
+}
+
+function renderBlipSprite(kind, r, marker, now) {
+  const size = Math.ceil(r * 4) + 4;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  drawBlip(canvas.getContext('2d'), kind, size / 2, size / 2, r, marker, now);
+  return canvas;
+}
+
+const FLASHING = { flash: true };
+
 /** The blip kind to draw for a marker (its own kind, or its icon override). */
 export function blipKindOf(marker) {
-  if (marker.icon && BLIP_STYLES[marker.icon]) return marker.icon;
-  return BLIP_STYLES[marker.kind] ? marker.kind : 'activity';
+  return blipStyleForMarker(marker, BLIP_STYLES);
 }
 
 /** The player's arrow, pointing up before rotation; `angle` turns it clockwise. */

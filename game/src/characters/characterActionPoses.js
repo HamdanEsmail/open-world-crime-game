@@ -17,9 +17,10 @@ export const MELEE_COMBO = ['jab', 'cross', 'kick'];
 /**
  * Raise a weapon (or fists) to the line of fire. `yaw` and `pitch` are the aim relative to the body
  * (radians, pitch + up); `kick` 0..1 is the recoil still in the arms. Writes the aim direction (body
- * frame) into fx.aimX/Y/Z.
+ * frame) into fx.aimX/Y/Z. `still` (0..1) is how still the person stands: it plants the feet in a
+ * staggered stance.
  */
-export function poseAim(out, rig, weaponClass, yaw, pitch, kick, fx) {
+export function poseAim(out, rig, weaponClass, yaw, pitch, kick, fx, still = 1) {
   const h = rig.height;
   const cp = Math.cos(pitch);
   const dx = Math.sin(yaw) * cp;
@@ -36,17 +37,18 @@ export function poseAim(out, rig, weaponClass, yaw, pitch, kick, fx) {
   const shoulderY = 1.4 * h;
   const back = kick * 0.06;
   if (!weaponClass) {
-    // A boxer's guard: fists up before the chin.
-    setHand(out, 0, 0.11, 1.5 * h, 0.3, 1, 0.5, -0.9, -0.2);
-    setHand(out, 1, -0.1, 1.49 * h, 0.24, 1, -0.5, -0.9, -0.2);
+    // A boxer's guard: fists up before the chin, left foot forward, knees soft, chin tucked.
+    setHand(out, 0, 0.1, 1.41 * h, 0.33, 1, 0.5, -0.9, -0.2);
+    setHand(out, 1, -0.11, 1.39 * h, 0.26, 1, -0.5, -0.9, -0.2);
     out[POSE.L_GRIP] = 1;
     out[POSE.R_GRIP] = 1;
     out[POSE.AIM_HAND] = 0;
     out[POSE.SUPPORT_GRIP] = 0;
-    out[POSE.SPINE_PITCH] = 0.1;
-    out[POSE.NECK_PITCH] = 0.05;
-    out[POSE.SPINE_YAW] -= 0.2;
-    out[POSE.NECK_YAW] += 0.2;
+    out[POSE.SPINE_PITCH] = 0.14;
+    out[POSE.NECK_PITCH] = 0.02;
+    out[POSE.SPINE_YAW] -= 0.22;
+    out[POSE.NECK_YAW] += 0.22;
+    stance(out, rig, 0.14 * still, -0.1 * still, 0.035 * still);
     return;
   }
   if (weaponClass === 'bat') {
@@ -82,6 +84,19 @@ export function poseAim(out, rig, weaponClass, yaw, pitch, kick, fx) {
   out[POSE.AIM_HAND] = 1;
   out[POSE.R_GRIP] = 1;
   out[POSE.L_GRIP] = 1;
+  out[POSE.SPINE_PITCH] += 0.06;
+  stance(out, rig, 0.1 * still, -0.08 * still, 0.02 * still);
+}
+
+/** A planted fighting or shooting stance: left foot ahead, right foot back, knees a little bent. */
+function stance(out, rig, leftZ, rightZ, drop) {
+  const fl = FOOT_IK_BASE[0];
+  const fr = FOOT_IK_BASE[1];
+  out[fl + 3] += leftZ * rig.height;
+  out[fr + 3] += rightZ * rig.height;
+  out[fl + 1] += 0.15 * leftZ;
+  out[fr + 1] += 0.15 * rightZ;
+  out[POSE.ROOT_Y] -= drop * rig.height;
 }
 
 /** Holding a weapon while not aiming: pistols hang by the leg, long guns are carried across the body. */
@@ -113,7 +128,7 @@ export function poseMelee(out, rig, move, t, fx) {
   const u = Math.min(1, t / spec.duration);
   const hit = spec.strike / spec.duration;
   const extend = u < hit ? easeOut(u / hit) : 1 - smooth((u - hit) / (1 - hit));
-  poseAim(out, rig, null, 0, 0, 0, fx);
+  poseAim(out, rig, null, 0, 0, 0, fx, 1);
   if (move === 'jab') {
     setHand(out, 0, 0.11 - 0.06 * extend, (1.5 - 0.03 * extend) * h, 0.3 + 0.34 * extend, 1, 0.5, -0.8, -0.3);
     out[POSE.SPINE_YAW] -= 0.25 * extend;
@@ -257,20 +272,27 @@ export function poseGesture(out, rig, gesture, t, seed) {
     out[POSE.NECK_PITCH] = 0.12;
     out[POSE.SPINE_PITCH] = -0.04;
   } else if (gesture === 'cower') {
+    // Squatting low, head ducked, both hands clasped over the head, elbows in front of the face.
     const shake = Math.sin(t * 19 + seed) * 0.01;
     out[POSE.ROOT_Y] = -0.5 * h;
-    out[POSE.ROOT_PITCH] = 0.45;
-    out[POSE.ROOT_Z] = -0.05;
-    out[POSE.SPINE_PITCH] = 0.55 + shake;
-    out[POSE.NECK_PITCH] = 0.45;
+    out[POSE.ROOT_PITCH] = 0.3;
+    out[POSE.ROOT_Z] = -0.04;
+    out[POSE.ROOT_X] = 0;
+    out[POSE.SPINE_PITCH] = 0.35 + shake;
+    out[POSE.NECK_PITCH] = 0.5;
+    out[POSE.NECK_YAW] = 0;
     for (let side = 0; side < 2; side += 1) {
       const f = FOOT_IK_BASE[side];
-      out[f + 1] = SIDE_SIGN[side] * 0.16;
-      out[f + 3] = 0.08;
-      out[f + 4] = 0.25;
+      out[f] = 1;
+      out[f + 1] = SIDE_SIGN[side] * 0.17;
+      out[f + 2] = rig.ankleHeight + 0.02;
+      out[f + 3] = 0.06;
+      out[f + 4] = 0.35;
     }
-    setHand(out, 0, 0.07, 1.06 * h, 0.4, 1, 0.8, -0.2, -0.3);
-    setHand(out, 1, -0.07, 1.07 * h, 0.4, 1, -0.8, -0.2, -0.3);
+    setHand(out, 0, 0.06, 0.99 * h, 0.5 * h, 1, 0.6, -0.1, 0.8);
+    setHand(out, 1, -0.06, 1.0 * h, 0.49 * h, 1, -0.6, -0.1, 0.8);
+    out[POSE.L_GRIP] = 0;
+    out[POSE.R_GRIP] = 0;
   } else if (gesture === 'talk') {
     const a = Math.sin(t * 2.3 + seed);
     const b = Math.sin(t * 3.1 + seed * 2.1);
@@ -433,6 +455,13 @@ export function poseGetUp(out, rig, u, faceUp) {
     out[leg + 2] = s * 0.1;
     out[leg + 3] = k(9) + lead * k(10) * 1.2;
     out[leg + 4] = k(11);
+    // From the crouch onward the feet are planted under the body and the knees follow.
+    const f = FOOT_IK_BASE[side];
+    out[f] = smooth((u - 0.52) / 0.2);
+    out[f + 1] = s * (rig.hipX + 0.03);
+    out[f + 2] = rig.ankleHeight;
+    out[f + 3] = (side === 1 ? 0.09 * (1 - u) * 2 : -0.02) * h;
+    out[f + 4] = 0;
   }
   out[POSE.AIM_HAND] = 0;
   out[POSE.SUPPORT_GRIP] = 0;

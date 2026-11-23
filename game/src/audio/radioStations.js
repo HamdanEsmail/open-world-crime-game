@@ -1,8 +1,7 @@
-// The car radio of Port Sarab: five stations on the dial, each with its host and tagline, four of them
-// generating endless original music and one listening in on the police. The radio plays while the
-// player drives, fades in on getting in and out on getting out, crackles with static between stations,
-// remembers the station each car was tuned to, and every station keeps "broadcasting" while you are
-// away: tune back in and it has moved on to wherever it would be.
+// The car radio of Port Sarab: five stations, each with a host and tagline, four making endless original
+// music and one listening in on the police. It fades in when the player drives, crackles with static
+// between stations, remembers each car's station, and every station keeps "broadcasting" while you are
+// away: tune back in and it has moved on.
 import { SARAB_GOLD } from './stationSarabGold.js';
 import { DUNE_FM } from './stationDuneFm.js';
 import { RADIO_KHAMSIN } from './stationRadioKhamsin.js';
@@ -11,9 +10,12 @@ import { PSPD_SCANNER } from './stationPspdScanner.js';
 import { createSequencer, mixSeed } from './musicSequencer.js';
 import { getReverbImpulse, startNoiseLoop } from './synthPrimitives.js';
 import { playSoundRecipe } from './soundEffects.js';
+import { RADIO_STATION_GUIDE, nextStationIndex, previousStationIndex } from './radioAndSoundGuide.js';
 
-/** Every station on the dial, in dial order. */
-export const RADIO_STATIONS = [SARAB_GOLD, DUNE_FM, RADIO_KHAMSIN, MARINA_LOUNGE, PSPD_SCANNER];
+const COMPOSERS = { sarab_gold: SARAB_GOLD, dune_fm: DUNE_FM, radio_khamsin: RADIO_KHAMSIN, marina_lounge: MARINA_LOUNGE, pspd_scanner: PSPD_SCANNER };
+
+/** Every station on the dial, in the guide's dial order. */
+export const RADIO_STATIONS = RADIO_STATION_GUIDE.map((guide) => COMPOSERS[guide.id]);
 
 /**
  * The radio for game.audio.radio: { stations, index, current, next(), previous(), off(), select(i) }.
@@ -46,8 +48,8 @@ export function createRadioDial(engine, game) {
       return listening && index >= 0 && !!player;
     },
     nowPlaying: null,
-    next: () => select(index + 1 >= RADIO_STATIONS.length ? -1 : index + 1),
-    previous: () => select(index - 1 < -1 ? RADIO_STATIONS.length - 1 : index - 1),
+    next: () => select(nextStationIndex(index, RADIO_STATIONS.length)),
+    previous: () => select(previousStationIndex(index, RADIO_STATIONS.length)),
     off: () => select(-1),
     select,
     setListening,

@@ -75,10 +75,10 @@ export function createRig(build = {}) {
     spineY: 0.075 * h,
     spineZ: -0.01 * h,
     neckY: 0.465 * h,
-    neckZ: -0.012 * h,
+    neckZ: 0.012 * h,
     shoulderX: 0.178 * sh * (0.62 + 0.38 * w),
     shoulderY: 0.395 * h,
-    shoulderZ: -0.02 * h,
+    shoulderZ: -0.006 * h,
     toeReach: 0.13 * h,
     legLength: 0.84 * h,
   };

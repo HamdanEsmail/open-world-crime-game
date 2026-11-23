@@ -1,35 +1,9 @@
-// The bed of the world under everything else: gusting desert wind and its whistle out in the Amber
-// Dunes, surf rolling in from the gulf to the north, the low hum of the city with distant horns and the
-// murmur of crowds, gulls over the shore by day, crickets by night, and the howl of the khamsin when
-// the sandstorm comes. Each layer fades in by where the camera is, the hour and the weather, and the
-// whole bed ducks under the car radio.
+// The bed of the world: gusting wind in the Amber Dunes, surf from the gulf to the north, the city's hum
+// with distant horns and crowd murmur, gulls by day, crickets by night, and the howl of the khamsin when
+// the sandstorm comes. Layers fade by the camera's place, the hour and the weather, and the whole bed
+// ducks under the car radio.
 import { startNoiseLoop, playTone } from './synthPrimitives.js';
 import { startHornVoice } from './soundEffects.js';
-
-/**
- * What the bed should be right now, from the camera's place, the hour and the weather.
- * Fills and returns `out`: {desert, shore, city, crowd, night, storm, height, seaPan, duck}.
- */
-export function ambienceMixFor(game, radioPlaying, out) {
-  const camera = game.camera;
-  const e = camera && camera.matrixWorld ? camera.matrixWorld.elements : null;
-  const z = e ? e[14] : 0;
-  const y = e ? e[13] : 10;
-  out.desert = smooth(780, 950, z);
-  out.shore = smooth(-560, -760, z);
-  const hour = typeof game.time?.hour === 'number' ? game.time.hour : 12;
-  const skyNight = game.sky && typeof game.sky.night === 'number' ? game.sky.night : null;
-  out.night = skyNight !== null ? skyNight : Math.max(smooth(19, 20.5, hour), 1 - smooth(4.5, 6, hour));
-  out.height = smooth(40, 160, y);
-  out.city = (1 - out.desert) * (1 - 0.45 * out.shore) * (1 - 0.6 * out.height);
-  out.crowd = out.city * (1 - 0.75 * out.night);
-  out.storm = Math.max(0, Math.min(1, game.weather?.sandstorm || 0));
-  const rightZ = e ? e[2] : 0;
-  const rightX = e ? e[0] : 1;
-  out.seaPan = Math.max(-1, Math.min(1, -rightZ / (Math.sqrt(rightX * rightX + rightZ * rightZ) || 1))) * 0.7;
-  out.duck = radioPlaying ? 0.5 : 1;
-  return out;
-}
 
 /**
  * Build the ambience bed on any audio context. apply(mix, when) moves each layer toward `mix`
@@ -93,22 +67,22 @@ export function createCityAmbience(ctx, destination) {
     const tc = 0.25;
     const open = Math.max(mix.desert, mix.height * 0.7);
     wind.filter.frequency.setTargetAtTime(240 + 480 * gust, t, tc);
-    wind.gain.gain.setTargetAtTime(open * (0.22 + 0.32 * gust) * duck, t, tc);
+    wind.gain.gain.setTargetAtTime(open * (0.44 + 0.64 * gust) * duck, t, tc);
     whistle.filter.frequency.setTargetAtTime(900 + 700 * gust, t, tc);
-    whistle.gain.gain.setTargetAtTime(open * Math.max(0, gust - 0.55) * 0.5 * duck, t, tc);
+    whistle.gain.gain.setTargetAtTime(open * Math.max(0, gust - 0.55) * duck, t, tc);
 
     const wave = Math.max(surfEnvelope(t, 7.3), 0.8 * surfEnvelope(t + 2.9, 10.9));
     surf.filter.frequency.setTargetAtTime(320 + 2600 * wave, t, 0.12);
-    surf.gain.gain.setTargetAtTime(mix.shore * (0.08 + 0.42 * wave) * duck, t, 0.12);
-    surfLow.gain.gain.setTargetAtTime(mix.shore * (0.15 + 0.35 * wave) * duck, t, 0.15);
+    surf.gain.gain.setTargetAtTime(mix.shore * (0.036 + 0.19 * wave) * duck, t, 0.12);
+    surfLow.gain.gain.setTargetAtTime(mix.shore * (0.065 + 0.15 * wave) * duck, t, 0.15);
     if (surfPan) surfPan.pan.setTargetAtTime(mix.seaPan || 0, t, 0.3);
 
     const traffic = 0.6 + 0.4 * Math.sin(t * 0.21 + 2);
-    hum.gain.gain.setTargetAtTime(mix.city * (0.32 - 0.14 * mix.night) * duck, t, tc);
+    hum.gain.gain.setTargetAtTime(mix.city * (0.22 - 0.1 * mix.night) * duck, t, tc);
     swish.filter.frequency.setTargetAtTime(600 + 500 * traffic, t, tc);
-    swish.gain.gain.setTargetAtTime(mix.city * 0.07 * traffic * (1 - 0.5 * mix.night) * duck, t, tc);
+    swish.gain.gain.setTargetAtTime(mix.city * 0.05 * traffic * (1 - 0.5 * mix.night) * duck, t, tc);
 
-    crowd.gain.setTargetAtTime(mix.crowd * 0.16 * duck, t, tc);
+    crowd.gain.setTargetAtTime(mix.crowd * 0.11 * duck, t, tc);
     if (t >= nextBabble) {
       nextBabble = t + 0.07 + Math.random() * 0.1;
       for (let i = 0; i < voices.length; i += 1) voices[i].gain.gain.setTargetAtTime(Math.random() * (i === 0 ? 1 : 0.7), t, 0.035);
@@ -118,13 +92,13 @@ export function createCityAmbience(ctx, destination) {
 
     const s = mix.storm || 0;
     const stormGust = 0.6 + 0.4 * gust;
-    storm.gain.setTargetAtTime(s * (0.5 + 0.5 * stormGust), t, 0.3);
+    storm.gain.setTargetAtTime(s * 0.68 * (0.5 + 0.5 * stormGust), t, 0.3);
     howl.filter.frequency.setTargetAtTime(380 + 520 * gust, t, 0.2);
-    howl.gain.gain.setTargetAtTime(0.55, t, 0.5);
+    howl.gain.gain.setTargetAtTime(0.75, t, 0.5);
     howlHigh.filter.frequency.setTargetAtTime(1100 + 600 * gust, t, 0.2);
-    howlHigh.gain.gain.setTargetAtTime(0.22 * gust, t, 0.3);
-    roar.gain.gain.setTargetAtTime(0.5, t, 0.5);
-    grit.gain.gain.setTargetAtTime(0.05 + 0.05 * gust, t, 0.3);
+    howlHigh.gain.gain.setTargetAtTime(0.3 * gust, t, 0.3);
+    roar.gain.gain.setTargetAtTime(0.55, t, 0.5);
+    grit.gain.gain.setTargetAtTime(0.02 + 0.025 * gust, t, 0.3);
 
     crickets.gain.setTargetAtTime(mix.night * (1 - mix.desert * 0.5) * (1 - s) * 0.05 * duck, t, 0.6);
 
@@ -141,7 +115,7 @@ export function createCityAmbience(ctx, destination) {
   function distantHorn(t, level) {
     const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
     const g = ctx.createGain();
-    g.gain.value = 0.35 * level;
+    g.gain.value = 0.8 * level;
     if (panner) {
       panner.pan.value = Math.random() * 1.6 - 0.8;
       g.connect(panner).connect(distant);
@@ -175,6 +149,31 @@ export function createCityAmbience(ctx, destination) {
       for (const source of sources) source.stop(when + 1);
     },
   };
+}
+
+/**
+ * What the bed should be right now, from the camera's place, the hour and the weather.
+ * Fills and returns `out`: {desert, shore, city, crowd, night, storm, height, seaPan, duck}.
+ */
+export function ambienceMixFor(game, radioPlaying, out) {
+  const camera = game.camera;
+  const e = camera && camera.matrixWorld ? camera.matrixWorld.elements : null;
+  const z = e ? e[14] : 0;
+  const y = e ? e[13] : 10;
+  out.desert = smooth(780, 950, z);
+  out.shore = smooth(-560, -760, z);
+  const hour = typeof game.time?.hour === 'number' ? game.time.hour : 12;
+  const skyNight = game.sky && typeof game.sky.night === 'number' ? game.sky.night : null;
+  out.night = skyNight !== null ? skyNight : Math.max(smooth(19, 20.5, hour), 1 - smooth(4.5, 6, hour));
+  out.height = smooth(40, 160, y);
+  out.city = (1 - out.desert) * (1 - 0.45 * out.shore) * (1 - 0.6 * out.height);
+  out.crowd = out.city * (1 - 0.75 * out.night);
+  out.storm = Math.max(0, Math.min(1, game.weather?.sandstorm || 0));
+  const rightZ = e ? e[2] : 0;
+  const rightX = e ? e[0] : 1;
+  out.seaPan = Math.max(-1, Math.min(1, -rightZ / (Math.sqrt(rightX * rightX + rightZ * rightZ) || 1))) * 0.7;
+  out.duck = radioPlaying ? 0.5 : 1;
+  return out;
 }
 
 /** One wave on the shore: a slow build, the break, then the long wash back. 0..1. */

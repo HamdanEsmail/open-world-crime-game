@@ -111,9 +111,10 @@ export function createCombatTargetGrid(game) {
 
   /**
    * Everything whose cells lie along a ray on the ground plane, from (ox, oz) along the unit
-   * direction (dirX, dirZ) for `length` metres. A vertical shot gathers its own cell.
+   * direction (dirX, dirZ) for `length` metres. A vertical shot gathers its own cell. With `wide`
+   * the cells beside the path come too (a cone around the ray, for the aim assist).
    */
-  function gatherAlongRay(ox, oz, dirX, dirZ, length, out, what = 3) {
+  function gatherAlongRay(ox, oz, dirX, dirZ, length, out, what = 3, wide = false) {
     refresh();
     out.length = 0;
     stamp += 1;
@@ -134,7 +135,8 @@ export function createCombatTargetGrid(game) {
     let tMaxX = dx !== 0 ? (dx > 0 ? (cx + 1) * CELL - ox : ox - cx * CELL) / Math.abs(dx) : Infinity;
     let tMaxZ = dz !== 0 ? (dz > 0 ? (cz + 1) * CELL - oz : oz - cz * CELL) / Math.abs(dz) : Infinity;
     for (let guard = 0; guard < 128; guard += 1) {
-      collectCell(cx, cz, out, what);
+      if (wide) collectNeighbourhood(cx, cz, out, what);
+      else collectCell(cx, cz, out, what);
       if (tMaxX < tMaxZ) {
         if (tMaxX > reach) break;
         tMaxX += tDeltaX;
