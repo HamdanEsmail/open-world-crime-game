@@ -8,11 +8,13 @@ import { spireStage, gateStage } from '../missions/jobs/finaleSceneHelpers.js';
  * then the closing card. Skippable like any cutscene; free play resumes afterwards.
  * @param {Object} m  the job context
  * @param {'badge'|'crew'} [ending]
+ * @param {{set:Function}} [clock]  the job's held clock, if it holds one
  */
-export async function playCredits(m, ending) {
+export async function playCredits(m, ending, clock) {
   const shots = creditFlight(m);
   await m.fadeOut(1.1);
-  m.setTime(17.7);
+  if (clock) clock.set(17.6);
+  else m.setTime(17.6);
   m.setWeather(0, 0.5);
   const card = openStoryCard({ kicker: 'KHAMSIN', title: 'PORT SARAB', lines: [], tone: 'credits' });
   const roll = startCreditRoll(card, CREDIT_LINES, shots.reduce((sum, shot) => sum + shot.seconds, 0));

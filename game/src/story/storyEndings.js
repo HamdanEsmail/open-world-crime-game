@@ -5,7 +5,7 @@
 import {
   spireStage, gateStage, createCrewVoice, openJobScope, trackStall, lanePoint, shotOf, overShoulder, twoShot,
   placePerson, faceTo, distanceBetween, playerDistance, background, driveOff, strollTo, backInto, buildGoldShares,
-  freeSpotsAround,
+  freeSpotsAround, holdTheClock, shieldCast,
 } from '../missions/jobs/finaleSceneHelpers.js';
 import { playCredits, playStoryCard } from './creditsRoll.js';
 
@@ -30,7 +30,7 @@ export async function playBadgeEnding(m, carry = {}) {
     m.flag('banLifted', true);
     m.flag('endingSeen', 'badge');
     m.stat('endingsSeen', 1);
-    await playCredits(m, 'badge');
+    await playCredits(m, 'badge', act.clock);
   } finally {
     scope.close();
   }
@@ -60,7 +60,7 @@ export async function playCrewEnding(m, carry = {}) {
     m.grantVehicle('zephyr_mirage', 'safehouse_dunes');
     m.flag('endingSeen', 'crew');
     m.stat('endingsSeen', 1);
-    await playCredits(m, 'crew');
+    await playCredits(m, 'crew', act.clock);
   } finally {
     scope.close();
   }
@@ -70,6 +70,7 @@ export async function playCrewEnding(m, carry = {}) {
 function prepareTheAct(m, scope, carry) {
   const spire = spireStage(m);
   const act = { m, scope, voice: createCrewVoice(m), spire, gate: gateStage(m), crew: {}, summit: null, van: null };
+  act.clock = carry.clock || holdTheClock(m, scope, 17.8);
   const door = spire.door;
   const spots = { mina: { x: door.x + 2, z: door.z + 3 }, faris: { x: door.x + 4, z: door.z + 6 }, tavi: { x: door.x - 3, z: door.z + 4 } };
   for (const id of ['mina', 'faris', 'tavi']) {
@@ -81,6 +82,7 @@ function prepareTheAct(m, scope, carry) {
         person.health = person.maxHealth;
       }
     }
+    shieldCast(scope, person);
     act.crew[id] = person;
   }
   act.summit = usable(carry.summit) ? carry.summit : spawnParked(m, 'oryx_summit', spire.curb.x + 22, spire.curb.z + 12, Math.PI / 2, SUMMIT_PEARL);
@@ -124,6 +126,8 @@ async function runTaviDown(act) {
       person.intent.gesture = 'handsUp';
     }
   }
+  // Tavi runs out from under the crew's luck: a crash that bad can kill him now.
+  shieldCast(scope, tavi, false);
   const resumed = m.resumeFrom === 'badge_chase';
   if (resumed) {
     const ahead = lanePoint(m, gate.laneX, spire.curb.z + 160, 0);
@@ -250,7 +254,7 @@ async function arrestTavi(act) {
 async function viewOnThePlaza(act) {
   const { m, spire, crew } = act;
   await m.fadeOut(1);
-  m.setTime(19.8);
+  act.clock.set(19.6);
   m.setWeather(0.3, 3);
   const door = spire.door;
   m.teleportPlayer(door.x + 5, door.z + 13, Math.PI);
@@ -437,7 +441,7 @@ async function dawnAtTheHideout(act) {
   const { m, crew, summit, scope } = act;
   await m.fadeOut(1.2);
   m.wanted.clear();
-  m.setTime(5.9);
+  act.clock.set(6.1);
   m.setWeather(0, 1);
   const hideout = m.place('safehouse_dunes') || { x: -690, z: 1118 };
   const base = { x: hideout.x + 4, z: hideout.z + 8 };

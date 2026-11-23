@@ -4,7 +4,8 @@
 // then plays its own last act, its epilogue and the credits, and the city stays open afterwards.
 import {
   spireStage, createCrewVoice, openJobScope, lanePoint, shotOf, overShoulder, twoShot, placePerson, faceTo,
-  freeSpotsAround, stackGoldBars, coverValues, playerDistance, distanceBetween, leaveWeatherAfterJob,
+  freeSpotsAround, stackGoldBars, coverValues, playerDistance, distanceBetween, leaveWeatherAfterJob, holdTheClock,
+  shieldCast,
 } from './finaleSceneHelpers.js';
 import { playBadgeEnding, playCrewEnding } from '../../story/storyEndings.js';
 
@@ -33,7 +34,8 @@ export const job = {
 /** The plaza, the lobby, the vault, the choice, the ending; retries resume at each of them. */
 async function runTheVaneJob(m, scope) {
   const ctx = { m, scope, voice: createCrewVoice(m), spire: spireStage(m), crew: {}, van: null, summit: null, guards: [] };
-  m.setTime(18.8);
+  // Sunset inside the khamsin, held there for the whole heist.
+  ctx.clock = holdTheClock(m, scope, 17.8);
   m.setWeather(1, 5);
   m.setTraffic(0.04);
   m.setPedestrians(0);
@@ -42,11 +44,11 @@ async function runTheVaneJob(m, scope) {
 
   const resume = m.resumeFrom;
   if (resume && resume.startsWith('badge')) {
-    await playBadgeEnding(m);
+    await playBadgeEnding(m, { clock: ctx.clock });
     return;
   }
   if (resume && resume.startsWith('crew')) {
-    await playCrewEnding(m);
+    await playCrewEnding(m, { clock: ctx.clock });
     return;
   }
 
@@ -64,7 +66,7 @@ async function runTheVaneJob(m, scope) {
   await dahanBeforeTheVault(ctx);
   const ending = await theVaultAndTheChoice(ctx);
   m.checkpoint(ending === 'badge' ? 'badge_call' : 'crew_load');
-  const carry = { mina: ctx.crew.mina, faris: ctx.crew.faris, tavi: ctx.crew.tavi, summit: ctx.summit, van: ctx.van };
+  const carry = { mina: ctx.crew.mina, faris: ctx.crew.faris, tavi: ctx.crew.tavi, summit: ctx.summit, van: ctx.van, clock: ctx.clock };
   if (ending === 'badge') await playBadgeEnding(m, carry);
   else await playCrewEnding(m, carry);
 }
@@ -84,9 +86,10 @@ function parkTheCrew(ctx) {
     const person = m.spawnCast(id, at.x, at.z, Math.PI);
     if (!person) continue;
     placePerson(m, person, at.x, at.z, Math.PI);
-    // Sturdy enough to survive a stray round in the storm; the job only fails if Mina falls.
+    // Behind the van they are out of the fight; only Mina at the lift panel can be hurt (and fail the job).
     person.maxHealth = Math.max(person.maxHealth || 0, CREW_HEALTH);
     person.health = CREW_HEALTH;
+    shieldCast(ctx.scope, person);
     ctx.crew[id] = person;
   }
   m.failIfDead(ctx.crew.mina, 'Mina is down. Without her the lift stays shut.');
@@ -159,6 +162,7 @@ async function holdTheLobbyDoors(ctx) {
   const { mina, faris, tavi } = ctx.crew;
   const door = spire.door;
   placePerson(m, mina, door.x + 1.4, spire.towerSouth + 1.1, Math.PI);
+  shieldCast(scope, mina, false);
   if (faris) placePerson(m, faris, door.x + 4.2, spire.towerSouth + 1.6, Math.PI * 0.75);
   if (tavi) placePerson(m, tavi, door.x - 3.4, spire.towerSouth + 1.6, -Math.PI * 0.75);
   if (playerDistance(m, door) > 12) m.teleportPlayer(door.x - 1, door.z + 6, Math.PI);
@@ -213,6 +217,7 @@ async function holdTheLobbyDoors(ctx) {
     m.objective('Finish the last of the guards');
     await m.dead(alive.filter((guard) => guard.alive !== false), { label: 'GUARDS' });
   }
+  shieldCast(scope, mina, true);
   voice.talk([['mina', "There. Lift's ours. Everyone in, now."]]);
   await voice.quiet();
 }

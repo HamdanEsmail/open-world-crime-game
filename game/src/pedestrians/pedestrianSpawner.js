@@ -17,6 +17,8 @@ export function createPedestrianSpawner(ctx) {
   const zones = [];
   const nearby = [];
   const spot = { walkway: null, t: 0, x: 0, z: 0 };
+  const nearWalkways = [];
+  const nearLengths = [];
   let refillPending = true;
   let target = 0;
   let nextTargetTime = 0;
@@ -47,6 +49,7 @@ export function createPedestrianSpawner(ctx) {
     }
     if (refillPending && ctx.player.known) {
       refillPending = false;
+      gatherNearWalkways();
       fill(true, 320);
     } else {
       const alive = livingCount();
@@ -85,32 +88,83 @@ export function createPedestrianSpawner(ctx) {
 
   /** Try to bring the crowd up to target; `relaxed` (after a teleport) may place people in plain view. */
   function fill(relaxed, attempts) {
+    let known = people.length;
     for (let a = 0; a < attempts; a += 1) {
+      // Newcomers of this very frame must count when the next one looks for room.
+      if (people.length !== known) {
+        known = people.length;
+        ctx.grid.rebuild(people);
+      }
       if (livingCount() >= target) return;
       // A sunny beach or a market in full swing draws more of the crowd than a plain street.
       const siteShare = clamp(ctx.activities.siteRoom / Math.max(1, target * 0.8), 0.25, 0.68);
       const roll = rng.next();
       if (roll < siteShare && ctx.activities.trySpawnAtSite(relaxed) > 0) continue;
       if (roll < siteShare + 0.13 && ctx.activities.trySpawnKerbLife(relaxed) > 0) continue;
-      if (pickWalkwaySpot(relaxed)) spawnWalkers(spot);
+      if (pickWalkwaySpot(relaxed)) spawnWalkers(spot, relaxed);
     }
   }
 
   /**
    * A random point on a sidewalk near the player where nobody would see a person appear
-   * (written into the shared spot {walkway, t, x, z}); null when this try found none.
+   * (written into the shared spot {walkway, t, x, z}); null when this try found none. A `relaxed`
+   * fill spreads people evenly along every sidewalk around, as a settled street looks.
    */
   function pickWalkwaySpot(relaxed) {
+    if (relaxed) return pickSpreadSpot();
     const p = ctx.player;
-    const minD = relaxed ? 5 : population.minSpawnDistance * 0.36;
-    const reach = relaxed ? 12 + 110 * Math.pow(rng.next(), 1.6) : lerp(60, Math.min(RECYCLE_DISTANCE, population.spawnRadius), rng.next());
+    const minD = population.minSpawnDistance * 0.36;
+    const reach = lerp(60, Math.min(RECYCLE_DISTANCE, population.spawnRadius), rng.next());
     const hit = game.roads.randomWalkwayNear(p.x, p.z, minD, Math.max(minD + 12, reach), rng);
     if (!hit) return null;
     spot.walkway = hit.walkway;
     spot.t = hit.t;
     spot.x = hit.x;
     spot.z = hit.z;
-    return acceptPlace(spot.x, spot.z, relaxed) ? spot : null;
+    return acceptPlace(spot.x, spot.z, false) ? spot : null;
+  }
+
+  /** The sidewalks within reach of the player, with their running lengths, for an even fill. */
+  function gatherNearWalkways() {
+    nearWalkways.length = 0;
+    nearLengths.length = 0;
+    const p = ctx.player;
+    let total = 0;
+    const walkways = game.roads.walkways;
+    for (let i = 0; i < walkways.length; i += 1) {
+      const w = walkways[i];
+      let t = ((p.x - w.x0) * w.dirX + (p.z - w.z0) * w.dirZ) / w.length;
+      t = clamp(t, 0, 1);
+      if (Math.hypot(p.x - (w.x0 + (w.x1 - w.x0) * t), p.z - (w.z0 + (w.z1 - w.z0) * t)) > FILL_FAR) continue;
+      total += w.length;
+      nearWalkways.push(w);
+      nearLengths.push(total);
+    }
+  }
+
+  /** A point anywhere along the nearby sidewalks (by length), 15 to 120 m out, 6 m clear of anyone. */
+  function pickSpreadSpot() {
+    const count = nearWalkways.length;
+    if (count === 0) return null;
+    const p = ctx.player;
+    for (let tries = 0; tries < 6; tries += 1) {
+      const at = rng.next() * nearLengths[count - 1];
+      let i = 0;
+      while (i < count - 1 && nearLengths[i] < at) i += 1;
+      const w = nearWalkways[i];
+      const t = rng.next();
+      const x = w.x0 + (w.x1 - w.x0) * t;
+      const z = w.z0 + (w.z1 - w.z0) * t;
+      const d = Math.hypot(x - p.x, z - p.z);
+      if (d < FILL_NEAR || d > FILL_FAR) continue;
+      if (!acceptPlace(x, z, true, undefined, FILL_SPACING)) continue;
+      spot.walkway = w;
+      spot.t = t;
+      spot.x = x;
+      spot.z = z;
+      return spot;
+    }
+    return null;
   }
 
   /**
@@ -123,23 +177,24 @@ export function createPedestrianSpawner(ctx) {
     const busy = busyness === undefined ? streetBusynessAt(game.city, x, z, game.time.hour) : busyness;
     if (rng.next() > clamp(busy / 0.8, 0.04, 1)) return false;
     if (ctx.grid.query(x, z, spacing, nearby).length > 0) return false;
-    if (relaxed) return true;
     const p = ctx.player;
     const d = Math.hypot(x - p.x, z - p.z);
+    if (relaxed) return d >= PERSONAL_SPACE;
     if (d < population.minSpawnDistance) return !ctx.view.inView(x, 1, z, 6);
     return !(d < POP_DISTANCE && ctx.view.canSee(x, z, POP_DISTANCE));
   }
 
   /** One walker, a couple or three friends on a sidewalk, heading one way or the other. */
-  function spawnWalkers(at) {
+  function spawnWalkers(at, relaxed) {
     const walkway = at.walkway;
     const district = game.city.districtAt(at.x, at.z);
     const hour = game.time.hour;
     const roll = rng.next();
     const size = roll < 0.07 ? 3 : roll < 0.24 ? 2 : 1;
-    // Most newcomers walk toward the player, so the streets fill where the player is.
+    // Most newcomers walk toward the player, so the streets fill where the player is; a settled
+    // street (the instant fill) goes both ways.
     const towardPlayer = (ctx.player.x - at.x) * walkway.dirX + (ctx.player.z - at.z) * walkway.dirZ > 0 ? 1 : 0;
-    const toEnd = rng.chance(0.75) ? towardPlayer : 1 - towardPlayer;
+    const toEnd = rng.chance(relaxed ? 0.5 : 0.75) ? towardPlayer : 1 - towardPlayer;
     const sign = toEnd === 1 ? 1 : -1;
     const fx = walkway.dirX * sign;
     const fz = walkway.dirZ * sign;
@@ -419,3 +474,9 @@ function lerp(a, b, t) {
 const POP_DISTANCE = 170;
 /** People farther than this who nobody can see are taken away and reborn nearer the player. */
 const RECYCLE_DISTANCE = 125;
+/** The instant fill (start, teleport): sidewalks this near and far, spawn points this far apart. */
+const FILL_NEAR = 15;
+const FILL_FAR = 120;
+const FILL_SPACING = 6;
+/** Nobody appears closer to the player than this. */
+const PERSONAL_SPACE = 5;

@@ -4,7 +4,7 @@
 // four-star response. Dahan wants the carrier's driver alive; Tavi wants no witnesses.
 import {
   gateStage, hangarStage, createCrewVoice, openJobScope, trackStall, lanePoint, shotOf, overShoulder, twoShot,
-  playerDistance, distanceBetween, background, driveOff, strollTo, placePerson, killedByPlayer,
+  playerDistance, distanceBetween, background, driveOff, strollTo, placePerson, killedByPlayer, holdTheClock, shieldCast,
 } from './finaleSceneHelpers.js';
 
 export const job = {
@@ -46,7 +46,7 @@ async function runGoldenGoose(m, scope) {
     escortCrew: [],
     leaderFate: 'none',
   };
-  m.setTime(17.4);
+  holdTheClock(m, scope, 17.5);
   m.setWeather(0, 4);
   m.setTraffic(0.8);
   ctx.ambush = ambushPoint(m);
@@ -154,9 +154,9 @@ function stageAtTheAmbush(ctx) {
   armTheNomad(ctx);
 }
 
+/** Tavi rides shotgun through a gunfight on wheels; stray rounds never take him out of the story. */
 function armTheNomad(ctx) {
-  const { m } = ctx;
-  m.failIfDead(ctx.tavi, "Tavi is down. The inside man's inside a body bag.");
+  shieldCast(ctx.scope, ctx.tavi);
 }
 
 /** The convoy turns off the Airfield Road: the carrier with a Jackal SUV in front and one behind. */

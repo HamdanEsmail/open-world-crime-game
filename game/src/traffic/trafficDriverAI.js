@@ -2,7 +2,7 @@
 // the road for cars, wrecks and people in its path, watches the lights, waits its turn at a junction,
 // honks at a blockage and then changes lane, pulls round it on the wrong side or backs out, and slows
 // to let a siren by. Looking around is staggered across frames; the wheel and pedals act every frame.
-import { PATH_PIECES } from './trafficJunctions.js';
+import { pointAhead, projectAhead, measureOnLane } from './trafficLanePath.js';
 import { mustStopForSignal } from './trafficRules.js';
 import { steerTowardPoint, idmAcceleration, applyPedals, backOut, holdStill } from './trafficCarControls.js';
 
@@ -136,7 +136,7 @@ export function createTrafficDriverAI(game, traffic, junctions) {
       lookAhead(state);
       decideAtJunction(state, now);
       handleBlockage(state, thinkDt);
-      if (state.reverseTime > 0 && !rearIsClear(state)) state.reverseTime = 0;
+      if (state.reverseTime > 0 && !traffic.grid.rearIsClear(vehicle)) state.reverseTime = 0;
       vehicle.controls.headlights = traffic.night;
     } else {
       const speed = vehicle.speed > 0 ? vehicle.speed : 0;
@@ -158,7 +158,7 @@ export function createTrafficDriverAI(game, traffic, junctions) {
     const vehicle = state.vehicle;
     const speed = vehicle.speed > 0 ? vehicle.speed : 0;
     const look = state.phase === 1 ? clampNumber(3.4 + speed * 0.36, 3.6, 9) : clampNumber(4.6 + speed * 0.5, 5, 16);
-    pointAhead(state, look, point);
+    pointAhead(state, look, point, junctions);
     let offset = state.offset;
     if (state.mode === 'flee') offset += Math.sin(game.time.elapsed * 1.9 + state.wobble) * 0.55;
     const alpha = steerTowardPoint(vehicle, point.x - point.dirZ * offset, point.z + point.dirX * offset);
@@ -194,7 +194,7 @@ export function createTrafficDriverAI(game, traffic, junctions) {
     if (state.phase === 0) {
       if (path) {
         let corner = path.safeSpeed * (fleeing ? 1.3 : state.temperament > 1.1 ? 1.08 : 1);
-        if (!state.committed && !fleeing && mustGiveWay(path)) corner = Math.min(corner, GIVE_WAY_SPEED);
+        if (!state.committed && !fleeing && slowsToGiveWay(path)) corner = Math.min(corner, GIVE_WAY_SPEED);
         const room = lane.length - state.s - 2;
         const reachable = Math.sqrt(corner * corner + 2 * state.comfortDecel * (room > 0 ? room : 0));
         if (reachable < v0) v0 = reachable;
@@ -217,13 +217,8 @@ export function createTrafficDriverAI(game, traffic, junctions) {
     const vehicle = state.vehicle;
     const pos = vehicle.pos;
     if (state.phase === 0) {
-      const lane = state.lane;
-      const rx = pos.x - lane.x0;
-      const rz = pos.z - lane.z0;
-      state.s = rx * lane.dirX + rz * lane.dirZ;
-      state.lateral = rz * lane.dirX - rx * lane.dirZ;
-      state.distToLine = lane.length - state.s - vehicle.dynamics.profile.halfLength;
-      if (state.s >= lane.length - 0.2 && state.path) enterCrossing(state);
+      measureOnLane(state, state.lane, vehicle.dynamics.profile.halfLength);
+      if (state.s >= state.lane.length - 0.2 && state.path) enterCrossing(state);
     } else {
       junctions.projectOnPath(state.path, pos.x, pos.z, state.pathPiece, onCurve);
       state.pathS = onCurve.distance;
@@ -520,59 +515,12 @@ export function createTrafficDriverAI(game, traffic, junctions) {
 
   /** Is a stretch of road beside or ahead of the car (in its lane's terms) free of vehicles and people? */
   function stretchClear(state, latMin, latMax, alongMin, alongMax) {
-    const lane = state.lane;
-    const vehicle = state.vehicle;
-    const midAlong = state.s + (alongMin + alongMax) * 0.5;
-    const midLat = (latMin + latMax) * 0.5;
-    const x = lane.x0 + lane.dirX * midAlong - lane.dirZ * midLat;
-    const z = lane.z0 + lane.dirZ * midAlong + lane.dirX * midLat;
-    const count = traffic.grid.query(x, z, (alongMax - alongMin) * 0.5 + 3, nearby);
-    for (let k = 0; k < count; k += 1) {
-      const thing = nearby[k];
-      if (thing === vehicle) continue;
-      const isVehicle = thing.dynamics !== undefined;
-      if (!isVehicle && thing.vehicle) continue;
-      const rx = thing.pos.x - lane.x0;
-      const rz = thing.pos.z - lane.z0;
-      const along = rx * lane.dirX + rz * lane.dirZ - state.s;
-      const lateral = rz * lane.dirX - rx * lane.dirZ;
-      const halfLength = isVehicle ? thing.dynamics.profile.halfLength : 0.4;
-      const halfWidth = isVehicle ? thing.dynamics.profile.halfWidth : 0.4;
-      if (along + halfLength < alongMin || along - halfLength > alongMax) continue;
-      if (lateral + halfWidth < latMin || lateral - halfWidth > latMax) continue;
-      return false;
-    }
-    return true;
-  }
-
-  /** Nothing (vehicle or person) in the few metres behind the car: safe to back up. */
-  function rearIsClear(state) {
-    const vehicle = state.vehicle;
-    const profile = vehicle.dynamics.profile;
-    const fx = Math.sin(vehicle.heading);
-    const fz = Math.cos(vehicle.heading);
-    const count = traffic.grid.query(vehicle.pos.x - fx * (profile.halfLength + 3), vehicle.pos.z - fz * (profile.halfLength + 3), 5, nearby);
-    for (let k = 0; k < count; k += 1) {
-      const thing = nearby[k];
-      if (thing === vehicle) continue;
-      const isVehicle = thing.dynamics !== undefined;
-      if (!isVehicle && thing.vehicle) continue;
-      const rx = thing.pos.x - vehicle.pos.x;
-      const rz = thing.pos.z - vehicle.pos.z;
-      const along = rx * fx + rz * fz;
-      const across = rz * fx - rx * fz;
-      const halfLength = isVehicle ? thing.dynamics.profile.halfLength : 0.4;
-      const halfWidth = isVehicle ? thing.dynamics.profile.halfWidth : 0.4;
-      if (along > -profile.halfLength + 0.5 || along < -(profile.halfLength + 6 + halfLength)) continue;
-      if (Math.abs(across) > profile.halfWidth + halfWidth + 0.3) continue;
-      return false;
-    }
-    return true;
+    return traffic.grid.stretchIsClear(state.lane, state.s, latMin, latMax, alongMin, alongMax, state.vehicle);
   }
 
   /** Back up for `seconds` with the wheel at `steer`, if the way behind is clear. */
   function startReversing(state, seconds, steer) {
-    if (!rearIsClear(state)) return false;
+    if (!traffic.grid.rearIsClear(state.vehicle)) return false;
     state.reverseTime = seconds;
     state.reverseSteer = steer;
     return true;
@@ -580,13 +528,9 @@ export function createTrafficDriverAI(game, traffic, junctions) {
 
   /** Switch to a neighbouring lane the same way; the sideways offset then eases the car across. */
   function moveToLane(state, lane) {
-    const pos = state.vehicle.pos;
-    const rx = pos.x - lane.x0;
-    const rz = pos.z - lane.z0;
     state.lane = lane;
     state.phase = 0;
-    state.s = rx * lane.dirX + rz * lane.dirZ;
-    state.lateral = rz * lane.dirX - rx * lane.dirZ;
+    measureOnLane(state, lane, state.vehicle.dynamics.profile.halfLength);
     state.offset = clampNumber(state.lateral, -laneWidth * 1.2, laneWidth * 1.2);
     state.offsetTarget = 0;
     state.blockedTime = 0;
@@ -624,123 +568,17 @@ export function createTrafficDriverAI(game, traffic, junctions) {
     }
   }
 
-  /**
-   * The point `distance` metres ahead of the car along its lane, its crossing curve and the lane after
-   * it, with the road's direction there, written into `out`.
-   */
-  function pointAhead(state, distance, out) {
-    let d = distance;
-    const lane = state.lane;
-    const path = state.path;
-    if (state.phase === 0) {
-      const room = lane.length - state.s;
-      if (d <= room || !path) {
-        const at = state.s + d;
-        out.x = lane.x0 + lane.dirX * at;
-        out.z = lane.z0 + lane.dirZ * at;
-        out.dirX = lane.dirX;
-        out.dirZ = lane.dirZ;
-        return out;
-      }
-      d -= room;
-    } else {
-      d += state.pathS;
-    }
-    if (d <= path.length) return junctions.pointOnPath(path, d, out);
-    d -= path.length;
-    const next = path.to;
-    out.x = next.x0 + next.dirX * d;
-    out.z = next.z0 + next.dirZ * d;
-    out.dirX = next.dirX;
-    out.dirZ = next.dirZ;
-    return out;
-  }
-
-  /**
-   * Where a point lies relative to the road this car is about to drive (its lane, the crossing curve,
-   * the next lane, up to `reach` metres ahead): distance along it from the car, signed sideways
-   * distance (+ right), and the road's direction there. False when the point is off that stretch.
-   */
-  function projectAhead(state, x, z, reach, out) {
-    let bestMiss = Infinity;
-    let base;
-    const path = state.path;
-    if (state.phase === 0) {
-      const lane = state.lane;
-      const rx = x - lane.x0;
-      const rz = z - lane.z0;
-      const along = rx * lane.dirX + rz * lane.dirZ - state.s;
-      const room = lane.length - state.s;
-      if (along > -2 && (along <= room + 1.5 || !path)) {
-        const lateral = rz * lane.dirX - rx * lane.dirZ;
-        bestMiss = Math.abs(lateral - state.offset);
-        out.along = along;
-        out.lateral = lateral;
-        out.dirX = lane.dirX;
-        out.dirZ = lane.dirZ;
-      }
-      if (!path || room > reach) return bestMiss < Infinity;
-      base = room;
-    } else {
-      base = -state.pathS;
-    }
-    const points = path.points;
-    const cumulative = path.along;
-    for (let i = 0; i < PATH_PIECES; i += 1) {
-      if (base + cumulative[i + 1] < -2) continue;
-      if (base + cumulative[i] > reach) break;
-      const length = cumulative[i + 1] - cumulative[i];
-      if (length < 1e-6) continue;
-      const ax = points[i * 2];
-      const az = points[i * 2 + 1];
-      const ux = (points[i * 2 + 2] - ax) / length;
-      const uz = (points[i * 2 + 3] - az) / length;
-      const rx = x - ax;
-      const rz = z - az;
-      const t = rx * ux + rz * uz;
-      if (t < -0.75 || t > length + 0.75) continue;
-      const lateral = rz * ux - rx * uz;
-      const miss = Math.abs(lateral - state.offset);
-      if (miss < bestMiss) {
-        bestMiss = miss;
-        out.along = base + cumulative[i] + t;
-        out.lateral = lateral;
-        out.dirX = ux;
-        out.dirZ = uz;
-      }
-    }
-    base += path.length;
-    if (base <= reach) {
-      const next = path.to;
-      const rx = x - next.x0;
-      const rz = z - next.z0;
-      const along = rx * next.dirX + rz * next.dirZ;
-      if (along > -1.5 && along < reach - base) {
-        const lateral = rz * next.dirX - rx * next.dirZ;
-        const miss = Math.abs(lateral - state.offset);
-        if (miss < bestMiss) {
-          bestMiss = miss;
-          out.along = base + along;
-          out.lateral = lateral;
-          out.dirX = next.dirX;
-          out.dirZ = next.dirZ;
-        }
-      }
-    }
-    return bestMiss < Infinity;
-  }
-
   /** Look down the road and at the junction ahead right now (a car just placed on a lane). */
   function lookAround(state) {
     lookAhead(state);
     decideAtJunction(state, game.time.elapsed);
   }
 
-  return { createDriverState, placeOnLane, driveTrafficCar, lookAround, choosePath, pointAhead, projectAhead };
+  return { createDriverState, placeOnLane, driveTrafficCar, lookAround, choosePath };
 }
 
 /** A junction without lights (and not a highway running straight through) is taken at a crawl. */
-function mustGiveWay(path) {
+function slowsToGiveWay(path) {
   const node = path.node;
   if (node.signal || node.edges.length < 3) return false;
   return !(path.from.kind === 'highway' && path.to.kind === 'highway');

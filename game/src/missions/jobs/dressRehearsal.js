@@ -4,7 +4,7 @@
 // stash the Summit at the Dune Hideout. Captain Dahan's condition: every officer goes home tonight.
 import {
   spireStage, gateStage, createCrewVoice, openJobScope, lanePoint, shotOf, overShoulder, twoShot, killedByPlayer,
-  background, backInto,
+  background, backInto, holdTheClock, shieldCast,
 } from './finaleSceneHelpers.js';
 
 export const job = {
@@ -42,7 +42,7 @@ async function runDressRehearsal(m, scope) {
     officersKilled: 0,
     gateSeconds: 0,
   };
-  m.setTime(17.2);
+  holdTheClock(m, scope, 17.4);
   m.setWeather(0, 4);
   m.setTraffic(0.9);
   m.setPedestrians(0.9);
@@ -133,7 +133,8 @@ function stageAtTheGate(ctx) {
 function armTheCar(ctx) {
   const { m, scope, voice } = ctx;
   m.failIfDestroyed(ctx.car, "The Summit is scrap. Mina won't rehearse a getaway in a taxi.");
-  m.failIfDead(ctx.mina, "Mina is down. There's no plan without the planner.");
+  // Mina rides in the passenger seat through a police chase; no stray round ends the story here.
+  shieldCast(scope, ctx.mina);
   scope.on('vehicle:collision', (event) => {
     if (!event || (event.vehicle !== ctx.car && event.other !== ctx.car) || !(event.speed > 7)) return;
     const other = event.vehicle === ctx.car ? event.other : event.vehicle;

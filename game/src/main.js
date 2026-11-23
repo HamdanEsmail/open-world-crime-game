@@ -1,19 +1,41 @@
 // KHAMSIN: Port Sarab. An original open-world crime game: a desert-coast city to drive and walk,
 // traffic and pedestrians, a five-star wanted level with police who respond, ten story jobs with
 // two endings. This file starts the game: the core first, then the open world, then the title screen.
-import { createGameContext } from './core/gameContext.js';
-import { startGameLoop } from './core/gameLoop.js';
-import { createSaveGame } from './core/saveGame.js';
+//
+// Loaded first, before the systems themselves: each system's rule book (one small file of the
+// rules that system plays by), the vehicle catalogue, the player, the camera, money and saving.
+import * as districtArchitecture from './world/districtArchitectureStyles.js';
+import * as groundSurfaces from './world/groundSurfaceRules.js';
+import * as streetFurniture from './world/streetFurnitureRules.js';
+import { VEHICLE_CATALOG, vehicleSpecById } from './vehicles/vehicleCatalog.js';
+import * as driving from './vehicles/drivingRules.js';
+import * as vehicleBodies from './vehicles/vehicleBodyStyles.js';
 import { createPlayerController } from './player/playerController.js';
 import { createFollowCamera } from './camera/followCamera.js';
+import * as traffic from './traffic/trafficRules.js';
+import * as pedestrians from './pedestrians/pedestrianRules.js';
+import * as wantedLevel from './police/wantedLevelRules.js';
+import * as policeHeavyResponse from './police/policeHeavyResponseRules.js';
+import * as storyJobs from './missions/storyJobOutline.js';
+import * as coverMeter from './story/coverMeterRules.js';
+import * as combat from './combat/combatRules.js';
+import * as activities from './activities/activityRules.js';
+import * as shopPrices from './economy/shopPriceRules.js';
 import { createWalletAndRank } from './economy/walletAndRank.js';
-import { VEHICLE_CATALOG, vehicleSpecById } from './vehicles/vehicleCatalog.js';
+import * as hudAndMenus from './ui/hudAndMenuGuide.js';
+import * as characterAnimation from './characters/characterAnimationRules.js';
+import * as effects from './effects/effectRules.js';
+import * as radioAndSound from './audio/radioAndSoundGuide.js';
+import { createSaveGame } from './core/saveGame.js';
+import { startGameLoop } from './core/gameLoop.js';
+import { createGameContext } from './core/sharedGameObject.js';
 
 /** Start everything on the page's canvas: loading screen, open world, then the title or a saved game. */
 async function bootPortSarab() {
   const game = createGameContext(document.getElementById('port-sarab-open-world'));
   window.khamsin = game;
   const query = new URLSearchParams(window.location.search);
+  game.rules = RULE_BOOKS;
   game.catalog.vehicles = VEHICLE_CATALOG;
   game.catalog.vehicleById = vehicleSpecById;
   game.economy = createWalletAndRank(game);
@@ -164,6 +186,12 @@ function hideLoadingScreen(game) {
   if (game.menus && game.menus.hideLoading) game.menus.hideLoading();
   else document.getElementById('loading-screen').hidden = true;
 }
+
+/** Every system's rule book by name, shared as game.rules. */
+const RULE_BOOKS = {
+  districtArchitecture, groundSurfaces, streetFurniture, driving, vehicleBodies, traffic, pedestrians, wantedLevel,
+  policeHeavyResponse, storyJobs, coverMeter, combat, activities, shopPrices, hudAndMenus, characterAnimation, effects, radioAndSound,
+};
 
 /** The title camera circles this point above The Spires. */
 const TITLE_SHOT = { orbit: { x: 20, y: 46, z: -470 }, radius: 430, height: 52, speed: 0.03, fov: 50 };

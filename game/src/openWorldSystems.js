@@ -67,7 +67,6 @@ export function updateOpenWorld(game, dt) {
   game.traffic.update(dt);
   game.pedestrians.update(dt);
   game.police.update(dt);
-  game.policeHelicopter.update(dt);
   game.roadblocks.update(dt);
   game.policeRadio.update(dt);
   game.missions.update(dt);
@@ -80,6 +79,7 @@ export function updateOpenWorld(game, dt) {
   // 2. The world moves: cars first, so the people sitting in them ride exactly with them.
   game.vehicles.update(dt);
   game.characters.update(dt);
+  game.policeHelicopter.update(dt);
   game.weapons.update(dt);
   game.wanted.update(dt);
   game.story.update(dt);

@@ -108,6 +108,58 @@ export function createTrafficObstacleGrid(game) {
     return free;
   }
 
+  /**
+   * Is a stretch of road free of vehicles and people on foot? The stretch is given in the terms of
+   * `lane`: `alongMin..alongMax` metres from `s` along it, `latMin..latMax` metres to its right.
+   */
+  function stretchIsClear(lane, s, latMin, latMax, alongMin, alongMax, self) {
+    const midAlong = s + (alongMin + alongMax) * 0.5;
+    const midLat = (latMin + latMax) * 0.5;
+    const x = lane.x0 + lane.dirX * midAlong - lane.dirZ * midLat;
+    const z = lane.z0 + lane.dirZ * midAlong + lane.dirX * midLat;
+    const found = query(x, z, (alongMax - alongMin) * 0.5 + 3, scratch);
+    for (let i = 0; i < found; i += 1) {
+      const thing = scratch[i];
+      if (thing === self) continue;
+      const isVehicle = thing.dynamics !== undefined;
+      if (!isVehicle && thing.vehicle) continue;
+      const rx = thing.pos.x - lane.x0;
+      const rz = thing.pos.z - lane.z0;
+      const along = rx * lane.dirX + rz * lane.dirZ - s;
+      const lateral = rz * lane.dirX - rx * lane.dirZ;
+      const halfLength = isVehicle ? thing.dynamics.profile.halfLength : 0.4;
+      const halfWidth = isVehicle ? thing.dynamics.profile.halfWidth : 0.4;
+      if (along + halfLength < alongMin || along - halfLength > alongMax) continue;
+      if (lateral + halfWidth < latMin || lateral - halfWidth > latMax) continue;
+      return false;
+    }
+    return true;
+  }
+
+  /** Nothing (vehicle or person) in the few metres behind `vehicle`: safe to back up. */
+  function rearIsClear(vehicle) {
+    const profile = vehicle.dynamics.profile;
+    const fx = Math.sin(vehicle.heading);
+    const fz = Math.cos(vehicle.heading);
+    const found = query(vehicle.pos.x - fx * (profile.halfLength + 3), vehicle.pos.z - fz * (profile.halfLength + 3), 5, scratch);
+    for (let i = 0; i < found; i += 1) {
+      const thing = scratch[i];
+      if (thing === vehicle) continue;
+      const isVehicle = thing.dynamics !== undefined;
+      if (!isVehicle && thing.vehicle) continue;
+      const rx = thing.pos.x - vehicle.pos.x;
+      const rz = thing.pos.z - vehicle.pos.z;
+      const along = rx * fx + rz * fz;
+      const across = rz * fx - rx * fz;
+      const halfLength = isVehicle ? thing.dynamics.profile.halfLength : 0.4;
+      const halfWidth = isVehicle ? thing.dynamics.profile.halfWidth : 0.4;
+      if (along > -profile.halfLength + 0.5 || along < -(profile.halfLength + 6 + halfLength)) continue;
+      if (Math.abs(across) > profile.halfWidth + halfWidth + 0.3) continue;
+      return false;
+    }
+    return true;
+  }
+
   function insert(thing) {
     if (count === next.length) {
       const grownNext = new Int32Array(next.length * 2);
@@ -124,12 +176,14 @@ export function createTrafficObstacleGrid(game) {
     count += 1;
   }
 
-  const scratch = new Array(48);
+  const scratch = new Array(64);
 
   return {
     rebuild,
     query,
     freeLengthOnLane,
+    stretchIsClear,
+    rearIsClear,
     get count() {
       return count;
     },

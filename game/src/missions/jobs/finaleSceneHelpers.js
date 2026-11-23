@@ -379,6 +379,40 @@ export function strollTo(m, person, x, z, pace = 'walk') {
   return background(m.walkTo(person, x, z, { pace }));
 }
 
+/**
+ * Hold the time of day for the length of a job, so a sunset stays a sunset however long the player
+ * takes (the city clock runs a game hour a minute). Returns { set(hour) } to move the held hour.
+ */
+export function holdTheClock(m, scope, hour) {
+  let held = hour;
+  m.setTime(held);
+  scope.every(() => {
+    if (Math.abs(m.game.time.hour - held) > 0.03) m.setTime(held);
+  });
+  return {
+    set(next) {
+      held = next;
+      m.setTime(held);
+    },
+  };
+}
+
+/**
+ * Keep a crew member out of the line of fire for this job (stray rounds should never end a story
+ * beat by accident); `on` false takes the shield away again. Lifted when the job ends.
+ */
+export function shieldCast(scope, person, on = true) {
+  if (!person || !person.tags) return;
+  if (!person.tags.finaleShield) {
+    person.tags.finaleShield = true;
+    scope.adopt(() => {
+      person.tags.invulnerable = false;
+      person.tags.finaleShield = false;
+    });
+  }
+  person.tags.invulnerable = on;
+}
+
 /** If the player has stepped out of `vehicle`, ask him back into it and wait until he is. */
 export async function backInto(m, vehicle, text) {
   const player = m.game.player;

@@ -67,8 +67,8 @@ async function openOnTheNightShift(m, scene) {
       speaker: 'tavi', text: 'Sahel Hauler in the yard by Pier Nine. Manifest says machine parts.' }),
     framedShot(m, pair, { distance: 4.8, height: 1.7, yaw: 2.3, lookHeight: 1.6, seconds: 2.6,
       speaker: 'zayd', text: 'And what does the truck say?' }),
-    framedShot(m, scene.hauler, { distance: 26, height: 9, yaw: scene.hauler.heading + 2.2, lookHeight: 1.5, seconds: 4.4, drift: 6,
-      speaker: 'tavi', text: 'Smelting gear. Vane melts down what he steals. Six Jackals sit on it.' }),
+    framedShot(m, scene.hauler, { distance: 19, height: 4.5, yaw: scene.roadSide + 0.45, lookHeight: 1.8, seconds: 4.4, drift: 5,
+      speaker: 'tavi', text: 'Smelting gear. Vane melts down what he steals. Jackals all over it.' }),
   ]);
   m.give('smg', 128);
   chatter(m, [
@@ -359,6 +359,7 @@ function surveyDocks(m) {
   const approachLane = laneSpot(m, haulerSpot.x, haulerSpot.z, { maxDistance: 120 });
   return {
     contact, yard, yardCentre, haulerSpot,
+    roadSide: Math.atan2(approachLane.x - haulerSpot.x, approachLane.z - haulerSpot.z),
     cranes: landmarkOr(m, 'portCranes', { x: 800, z: -840 }),
     approach: { x: approachLane.x, z: approachLane.z },
     customsStop: kerbSpot(m, customs.x - (customs.w || 70) / 2 - 40, customs.z),

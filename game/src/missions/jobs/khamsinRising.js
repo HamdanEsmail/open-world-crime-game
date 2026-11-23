@@ -4,7 +4,8 @@
 // talk the whole way; what Zayd tells Faris and Tavi face to face moves the Cover meter.
 import {
   spireStage, hangarStage, createCrewVoice, openJobScope, lanePoint, shotOf, overShoulder, twoShot, placePerson,
-  playerDistance, fairDriveSeconds, background, strollTo, backInto, buildGearCase, leaveWeatherAfterJob,
+  playerDistance, fairDriveSeconds, background, strollTo, backInto, buildGearCase, leaveWeatherAfterJob, holdTheClock,
+  shieldCast,
 } from './finaleSceneHelpers.js';
 
 export const job = {
@@ -41,7 +42,7 @@ async function runKhamsinRising(m, scope) {
     mina: null,
   };
   const from = Math.max(0, STAGES.indexOf(m.resumeFrom));
-  m.setTime(15.9);
+  ctx.clock = holdTheClock(m, scope, STORM_STEPS[from].hour);
   setTheStorm(ctx, from);
 
   if (from === 0) {
@@ -72,6 +73,7 @@ async function runKhamsinRising(m, scope) {
 function setTheStorm(ctx, leg) {
   const { m } = ctx;
   const step = STORM_STEPS[Math.min(leg, STORM_STEPS.length - 1)];
+  ctx.clock.set(step.hour);
   m.setWeather(step.storm, leg === 0 ? 20 : 45);
   m.setTraffic(step.traffic);
   m.setPedestrians(step.people);
@@ -120,7 +122,7 @@ function stageTheVan(ctx, from) {
 function armTheVan(ctx) {
   const { m, scope, voice } = ctx;
   m.failIfDestroyed(ctx.van, "The van is wrecked, and the heist with it.");
-  m.failIfDead(ctx.mina, "Mina is down. There's no heist without her.");
+  shieldCast(scope, ctx.mina);
   scope.on('vehicle:collision', (event) => {
     if (!event || (event.vehicle !== ctx.van && event.other !== ctx.van) || !(event.speed > 7)) return;
     voice.react(CREW_ON_BUMPS, 8);
@@ -322,7 +324,7 @@ async function stageAtTheSpire(ctx) {
   placePerson(m, ctx.mina, a.x, a.z, Math.PI);
   const faris = m.spawnCast('faris', b.x, b.z, Math.PI);
   const tavi = m.spawnCast('tavi', c.x, c.z, Math.PI);
-  m.setTime(18.6);
+  ctx.clock.set(17.9);
   m.setWeather(0.66, 6);
   leaveWeatherAfterJob(m, 0.62, 2);
   await m.cutscene([
@@ -346,10 +348,10 @@ const STAGES = [null, 'faris', 'gear', 'tavi'];
 
 /** The khamsin rising leg by leg, and the city emptying with it. */
 const STORM_STEPS = [
-  { storm: 0.12, traffic: 0.85, people: 0.8 },
-  { storm: 0.26, traffic: 0.62, people: 0.5 },
-  { storm: 0.42, traffic: 0.4, people: 0.3 },
-  { storm: 0.58, traffic: 0.2, people: 0.12 },
+  { hour: 15.9, storm: 0.12, traffic: 0.85, people: 0.8 },
+  { hour: 16.4, storm: 0.26, traffic: 0.62, people: 0.5 },
+  { hour: 16.9, storm: 0.42, traffic: 0.4, people: 0.3 },
+  { hour: 17.4, storm: 0.58, traffic: 0.2, people: 0.12 },
 ];
 
 const VAN_TEAL = 0x1ba39c;
